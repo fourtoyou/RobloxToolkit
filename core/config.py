@@ -4,7 +4,7 @@ import os
 import sys
 
 APP_NAME = "RobloxToolkit"
-VERSION = "2.3.0"
+VERSION = "2.4.0"
 LOCAL = os.environ.get("LOCALAPPDATA", ".")
 # เก็บข้อมูลไว้นอก AppData\Local เพราะ Python จาก Microsoft Store จำลอง (virtualize) โฟลเดอร์นั้น
 # ทำให้ Discord bot (รันด้วย Python) กับ Toolkit (.exe) มองเห็นไฟล์คนละชุด
@@ -54,6 +54,7 @@ DEFAULTS = {
     "click_points": [], "click_restore_cursor": True,
     "click_burst": 0, "click_burst_pause": 1.0,
     "macro_loops": 1, "macro_speed": 1.0, "macro_only_roblox": True,
+    "last_preset": "", "seen_home": False,
     "schedule": [],   # ตารางเวลาทำซ้ำทุกวัน [{"time":"23:00","action":"เริ่ม Anti-AFK","on":True}]
     "click_only_roblox": True, "click_max_min": 0, "click_max_clicks": 0,
     "sys_alerts": True, "gpu_temp_limit": 85, "ram_limit": 92,

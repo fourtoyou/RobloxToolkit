@@ -21,7 +21,7 @@ from core.history import History, fmt_dur, fmt_reason
 from core.netmon import TARGETS, NetMonitor
 from core.overlay import Overlay
 from core.watchdog import Watchdog
-from core.win import VK_F4, VK_F5, VK_F6, VK_F7, VK_F8, VK_F9, dpi_aware, hotkey_loop, kill_pid, roblox_pids, roblox_windows, u
+from core.win import VK_F4, VK_F5, VK_F6, VK_F7, VK_F8, VK_F9, SW_MINIMIZE, dpi_aware, hotkey_loop, kill_pid, roblox_pids, roblox_windows, u
 from core.ipc import grab_window
 
 try:
@@ -58,6 +58,171 @@ class Page(ctk.CTkFrame):
 
     def on_show(self):
         pass
+
+
+# =====================================================================
+class HomePage(Page):
+    """หน้าแรก — บอกสถานะด้วยภาษาคน + ปุ่มโหมดสำเร็จรูปที่ตั้งค่าให้ครบในคลิกเดียว
+
+    เหตุผลที่ต้องมี: โปรแกรมโตจนมี 10 หน้า สวิตช์เป็นสิบ ถ้าไม่มีทางลัดคนจะไม่กล้าใช้
+    """
+
+    # ชื่อโหมด -> (ไอคอน, คำอธิบาย, ค่าที่จะตั้ง, สิ่งที่ต้องทำเพิ่ม)
+    PRESETS = [
+        ("ฟาร์มทั้งคืน", "🌙", "ทิ้งไว้ข้ามคืน — ซ่อนเกม ปิดเสียง หรี่ FPS เหลือ 5 ต่อเน็ตเองถ้าหลุด",
+         {"invisible": True, "wait_idle": True, "auto_rejoin": True, "watchdog": True, "crash_relaunch": True,
+          "fps_cap_on": True, "fps_cap": 5, "fps_unlock_focus": True, "automute": True, "game_mode": True,
+          "notify_disconnect": True, "notify_rejoin": True, "sys_alerts": True}, "afk_hide"),
+        ("ฟาร์มแบบดูไปด้วย", "👀", "เล่นอย่างอื่นไปด้วย — ไม่ซ่อนเกม ไม่หรี่ FPS ยังได้ยินเสียง",
+         {"invisible": True, "wait_idle": True, "auto_rejoin": True, "watchdog": True,
+          "fps_cap_on": False, "automute": False, "game_mode": False}, "afk_only"),
+        ("เล่นเองปกติ", "🎮", "หยุดทุกอย่าง คืนเสียง คืน FPS เอาหน้าต่างกลับมา",
+         {"fps_cap_on": False, "automute": False, "game_mode": False}, "stop_all"),
+        ("เลิกเล่น ปิดเกม", "💤", "หยุด Anti-AFK แล้วปิด Roblox ให้เรียบร้อย",
+         {"fps_cap_on": False, "automute": False}, "close_game"),
+    ]
+
+    def __init__(self, master, app):
+        super().__init__(master, app)
+        ctk.CTkLabel(self, text=f"Roblox Toolkit", font=("Segoe UI", 24, "bold"), text_color=ACC).pack(anchor="w", padx=22, pady=(16, 0))
+        ctk.CTkLabel(self, text="เลือกโหมดที่ตรงกับที่จะทำ แล้วกดปุ่มเดียวจบ — ปรับละเอียดได้ที่เมนูด้านซ้าย",
+                     font=FS, text_color=DIM).pack(anchor="w", padx=22)
+
+        st = ctk.CTkFrame(self, fg_color=CARD, corner_radius=14)
+        st.pack(fill="x", padx=20, pady=12)
+        self.l_big = ctk.CTkLabel(st, text="กำลังตรวจสอบ...", font=("Segoe UI", 17, "bold"), justify="left")
+        self.l_big.pack(anchor="w", padx=18, pady=(14, 2))
+        self.l_sub = ctk.CTkLabel(st, text="", font=F, text_color=DIM, justify="left")
+        self.l_sub.pack(anchor="w", padx=18, pady=(0, 14))
+
+        grid = ctk.CTkFrame(self, fg_color="transparent")
+        grid.pack(fill="both", expand=True, padx=20)
+        grid.grid_columnconfigure((0, 1), weight=1, uniform="p")
+        self.cards = {}
+        for i, (name, icon, desc, _, _) in enumerate(self.PRESETS):
+            f = ctk.CTkFrame(grid, fg_color=CARD, corner_radius=14, border_width=2, border_color=CARD)
+            f.grid(row=i // 2, column=i % 2, sticky="nsew", padx=6, pady=6)
+            ctk.CTkLabel(f, text=f"{icon}  {name}", font=("Segoe UI", 16, "bold")).pack(anchor="w", padx=16, pady=(14, 2))
+            ctk.CTkLabel(f, text=desc, font=FS, text_color=DIM, justify="left", wraplength=330).pack(anchor="w", padx=16)
+            ctk.CTkButton(f, text="ใช้โหมดนี้", height=36, font=FB, command=lambda n=name: self.apply(n)).pack(fill="x", padx=16, pady=(10, 14))
+            self.cards[name] = f
+
+        row = ctk.CTkFrame(self, fg_color="transparent")
+        row.pack(fill="x", padx=20, pady=(4, 14))
+        ctk.CTkButton(row, text="📸 ถ่ายรูปเกมส่งเข้า Discord", font=F, height=34, fg_color="#3a3a4e", hover_color="#4a4a60",
+                      command=self.snap).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(row, text="🔀 ย้ายไปเซิร์ฟคนน้อย", font=F, height=34, fg_color="#3a3a4e", hover_color="#4a4a60",
+                      command=self.quiet).pack(side="left", padx=8)
+        ctk.CTkButton(row, text="🔄 รีเซ็ตตัวละคร", font=F, height=34, fg_color="#3a3a4e", hover_color="#4a4a60",
+                      command=lambda: threading.Thread(target=app.eng.reset_character, daemon=True).start()).pack(side="left", padx=8)
+        self.l_hint = ctk.CTkLabel(self, text="", font=FS, text_color=DIM)
+        self.l_hint.pack(anchor="w", padx=22, pady=(0, 10))
+
+    # ---------- ปุ่มด่วน ----------
+    def snap(self):
+        def work():
+            from core import ipc as _ipc
+            wins = roblox_windows(True) + [h for h in self.app.eng.hidden if u.IsWindow(h)]
+            if not wins:
+                return self.app.log("ไม่เจอหน้าต่าง Roblox")
+            path = os.path.join(config.DATA_DIR, "snap.png")
+            ok, msg = _ipc.screenshot_window(wins[0], path)
+            if not ok:
+                return self.app.log(f"ถ่ายไม่ได้: {msg}")
+            if self.app.cfg["webhook_url"]:
+                session.webhook_image(self.app.cfg["webhook_url"], open(path, "rb").read(), "📸 หน้าจอตอนนี้", "snap.png")
+                self.app.log("ส่งรูปเข้า Discord แล้ว")
+            else:
+                self.app.ui(lambda: os.startfile(path))
+                self.app.log("ยังไม่ได้ตั้ง webhook — เปิดรูปให้ดูแทน")
+        threading.Thread(target=work, daemon=True).start()
+
+    def quiet(self):
+        cur = self.app.eng.watcher.current
+        place = cur.get("place") or self.app.eng.last_place
+        if not place:
+            return self.app.log("ยังไม่รู้ว่าอยู่เกมไหน — เข้าเกมก่อน")
+        self.app.swatch.go(place, exclude=cur.get("job"))
+
+    # ---------- โหมดสำเร็จรูป ----------
+    def apply(self, name):
+        preset = next(p for p in self.PRESETS if p[0] == name)
+        _, _, _, values, extra = preset
+        app = self.app
+        app.sync_cfg()
+        app.cfg.update(values)
+        config.save(app.cfg)
+        app.apply_cfg_to_engine()
+        app.cfg["last_preset"] = name
+        app.log(f"⚡ เปลี่ยนเป็นโหมด: {name}")
+
+        if extra == "afk_hide":
+            if not app.eng.running:
+                app.eng.start(app.cfg["immediate"])
+            threading.Thread(target=self.hide_later, daemon=True).start()
+        elif extra == "afk_only":
+            app.eng.unhide_all()
+            if not app.eng.running:
+                app.eng.start(app.cfg["immediate"])
+        elif extra == "stop_all":
+            app.eng.stop()
+            app.eng.unhide_all()
+        elif extra == "close_game":
+            app.eng.stop()
+            app.power("close_roblox", "โหมดเลิกเล่น")
+        threading.Thread(target=lambda: fpscap.set_roblox_muted(app.cfg["automute"]), daemon=True).start()
+        app.refresh_all_pages()
+
+    def hide_later(self):
+        """ย่อแล้วซ่อนหน้าต่างเกมให้ (ต้องรอให้ Anti-AFK กดครั้งแรกเสร็จก่อน)"""
+        time.sleep(2)
+        for h in roblox_windows(True):
+            u.ShowWindow(h, SW_MINIMIZE)
+        time.sleep(0.6)
+        n = self.app.eng.hide_minimized()
+        self.app.log(f"ซ่อนหน้าต่างเกมแล้ว ({n})" if n else "ไม่มีหน้าต่างให้ซ่อน (เปิดเกมก่อน)")
+
+    # ---------- สถานะ ----------
+    def tick(self):
+        app, e, c = self.app, self.app.eng, self.app.cfg
+        cur = e.watcher.current
+        game = app.place_name(cur.get("place")) if cur.get("in_game") else None
+        if e.rejoining:
+            head, col = "🔄  กำลังต่อกลับเข้าเกม...", WARN
+        elif e.running:
+            nxt = max(0, int(e.next_at - time.time()))
+            head, col = f"🟢  Anti-AFK ทำงานอยู่ · กดอีกครั้งใน {nxt // 60}:{nxt % 60:02d}", ACC
+        elif game:
+            head, col = "⚪  อยู่ในเกมแต่ Anti-AFK ปิดอยู่", DIM
+        else:
+            head, col = "⚪  ยังไม่ได้เริ่ม", DIM
+        self.l_big.configure(text=head, text_color=col)
+
+        bits = [f"🎮 {game}" if game else "🎮 ยังไม่ได้อยู่ในเกม"]
+        sw = app.swatch
+        if sw.players is not None:
+            bits.append(f"👥 {sw.players}/{sw.maxp} คนในเซิร์ฟ")
+        st = app.net.stats("อินเทอร์เน็ต", 60) or {}
+        if st.get("avg") is not None:
+            bits.append(f"📶 {int(st['avg'])} ms" + (f" · หาย {st['loss']:.0f}%" if st.get("loss") else ""))
+        sysc = app.sys.cur
+        if sysc.get("gpu_temp") is not None:
+            bits.append(f"🌡 GPU {sysc['gpu_temp']:.0f}°C")
+        if sysc.get("ram") is not None:
+            bits.append(f"💾 RAM {sysc['ram']:.0f}%")
+        if c["fps_cap_on"]:
+            bits.append(f"🐢 จำกัด {c['fps_cap']} FPS" + (" (กำลังหรี่)" if app.fps.capping else ""))
+        if e.hidden:
+            bits.append(f"🙈 ซ่อน {len(e.hidden)} หน้าต่าง")
+        nx = app.sched.next_job()
+        if nx:
+            bits.append(f"🔁 {nx[0]} → {nx[1]}")
+        self.l_sub.configure(text="   ·   ".join(bits))
+
+        last = c.get("last_preset")
+        for name, f in self.cards.items():
+            f.configure(border_color=ACC if name == last else CARD)
+        self.l_hint.configure(text=f"โหมดล่าสุดที่ใช้: {last}" if last else "เคล็ดลับ: F8 เริ่ม/หยุด Anti-AFK ได้จากทุกที่ · F6 ออโต้คลิก · F9 overlay")
 
 
 # =====================================================================
@@ -1513,7 +1678,7 @@ class SettingsPage(Page):
 # =====================================================================
 class App(ctk.CTk):
     TIMER_ACTIONS = ("หยุด Anti-AFK", "ปิด Roblox", "ปิด Roblox + Sleep เครื่อง", "ปิดเครื่อง")
-    NAV = [("afk", "🎮  Anti-AFK"), ("games", "🚀  เกมโปรด"), ("click", "🖱  ออโต้คลิก"), ("stats", "📊  สถิติ"), ("analytics", "📈  วิเคราะห์"), ("sys", "🖥  เครื่อง"), ("history", "🕘  ประวัติ"), ("net", "📶  เน็ต"),
+    NAV = [("home", "🏠  หน้าแรก"), ("afk", "🎮  Anti-AFK"), ("games", "🚀  เกมโปรด"), ("click", "🖱  ออโต้คลิก"), ("stats", "📊  สถิติ"), ("analytics", "📈  วิเคราะห์"), ("sys", "🖥  เครื่อง"), ("history", "🕘  ประวัติ"), ("net", "📶  เน็ต"),
            ("file", "🛡  ตรวจไฟล์"), ("health", "🩺  สุขภาพระบบ"), ("settings", "⚙  ตั้งค่า")]
 
     def __init__(self, args):
@@ -1570,13 +1735,13 @@ class App(ctk.CTk):
 
         self.container = ctk.CTkFrame(self, fg_color="transparent")
         self.container.pack(side="left", fill="both", expand=True)
-        self.pages = {"afk": AfkPage(self.container, self), "games": GamesPage(self.container, self), "stats": StatsPage(self.container, self),
+        self.pages = {"home": HomePage(self.container, self), "afk": AfkPage(self.container, self), "games": GamesPage(self.container, self), "stats": StatsPage(self.container, self),
                       "analytics": AnalyticsPage(self.container, self), "click": ClickPage(self.container, self),
                       "sys": SysPage(self.container, self),
                       "history": HistoryPage(self.container, self), "net": NetPage(self.container, self), "file": FilePage(self.container, self),
                       "health": HealthPage(self.container, self), "settings": SettingsPage(self.container, self)}
         self.current = None
-        self.show("afk")
+        self.show("home" if not self.cfg.get("seen_home") or True else "afk")
 
         if self.cfg.get("multi_instance"):
             fpscap.multi_instance(True)
@@ -1695,6 +1860,26 @@ class App(ctk.CTk):
         self.apply_cfg_to_engine()
         self.attributes("-topmost", c["top"])
         config.save(c)
+
+    def refresh_all_pages(self):
+        """โหมดสำเร็จรูปเปลี่ยนค่าหลายอย่างพร้อมกัน — ต้องอัปเดตสวิตช์ในทุกหน้าให้ตรงด้วย"""
+        c = self.cfg
+        try:
+            a = self.pages["afk"]
+            for k, v in a.vars.items():
+                v.set(c[k])
+            st = self.pages["settings"]
+            for k, v in st.vars.items():
+                v.set(c[k])
+            y = self.pages["sys"]
+            y.v_fps.set(c["fps_cap_on"])
+            y.v_fpsn.set(str(c["fps_cap"]))
+            y.v_unlock.set(c["fps_unlock_focus"])
+            y.v_mute.set(c["automute"])
+            y.v_game.set(c["game_mode"])
+            y.v_alerts.set(c["sys_alerts"])
+        except Exception as ex:
+            config.dbg(f"refresh_all_pages: {ex}")
 
     def apply_cfg_to_engine(self):
         e, c = self.eng, self.cfg
@@ -1991,7 +2176,7 @@ class App(ctk.CTk):
         try:
             if self.timer_end and time.time() >= self.timer_end:
                 self.run_timer_action()
-            if self.current in ("afk", "net", "click", "sys"):
+            if self.current in ("home", "afk", "net", "click", "sys"):
                 self.pages[self.current].tick()
             e = self.eng
             cur = e.watcher.current
