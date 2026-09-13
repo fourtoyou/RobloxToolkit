@@ -23,6 +23,27 @@ class RECT(ctypes.Structure):
     _fields_ = [("l", ctypes.c_long), ("t", ctypes.c_long), ("r", ctypes.c_long), ("b", ctypes.c_long)]
 
 
+# handle บน 64-bit เป็นเลข 64 บิต — ต้องบอก ctypes ไม่ให้ตัดเป็น int 32 บิต ไม่งั้นพังแบบสุ่ม
+gdi32 = ctypes.windll.gdi32
+u.IsIconic.argtypes = [wintypes.HWND]
+u.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(RECT)]
+u.GetWindowDC.argtypes = [wintypes.HWND]
+u.GetWindowDC.restype = wintypes.HDC
+u.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
+u.PrintWindow.argtypes = [wintypes.HWND, wintypes.HDC, wintypes.UINT]
+u.PrintWindow.restype = wintypes.BOOL
+gdi32.CreateCompatibleDC.argtypes = [wintypes.HDC]
+gdi32.CreateCompatibleDC.restype = wintypes.HDC
+gdi32.CreateCompatibleBitmap.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int]
+gdi32.CreateCompatibleBitmap.restype = wintypes.HBITMAP
+gdi32.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
+gdi32.SelectObject.restype = wintypes.HGDIOBJ
+gdi32.GetDIBits.argtypes = [wintypes.HDC, wintypes.HBITMAP, wintypes.UINT, wintypes.UINT,
+                            ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT]
+gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+gdi32.DeleteDC.argtypes = [wintypes.HDC]
+
+
 def grab_window(hwnd):
     """จับภาพหน้าต่าง (แม้ถูกบัง) ด้วย PrintWindow — คืน (PIL.Image หรือ None, ข้อความ)"""
     from PIL import Image
@@ -34,7 +55,7 @@ def grab_window(hwnd):
     if w < 10 or h < 10:
         return None, "หน้าต่างเล็กเกินไป"
     hdc = u.GetWindowDC(hwnd)
-    gdi = ctypes.windll.gdi32
+    gdi = gdi32
     mdc = gdi.CreateCompatibleDC(hdc)
     bmp = gdi.CreateCompatibleBitmap(hdc, w, h)
     gdi.SelectObject(mdc, bmp)

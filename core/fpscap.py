@@ -198,3 +198,44 @@ def multi_instance(on=True):
 
 def multi_instance_on():
     return _mutex is not None
+
+
+# ---------- ให้ Roblox ได้ CPU ก่อนโปรแกรมอื่น ----------
+# FastFlag ปลดล็อก FPS ไม่ได้อีกแล้ว (Roblox ปิดตั้งแต่ 29 ก.ย. 2025) ตัวนี้เป็นของจริงที่ยังทำได้:
+# ยก priority ของโปรเซสเกมขึ้น = Windows แบ่ง CPU ให้เกมก่อน Chrome/Discord
+# ไม่แตะหน่วยความจำเกม ไม่ inject อะไร → Hyperion ไม่สนใจ
+PROCESS_SET_INFORMATION = 0x0200
+PRIORITY = {"normal": 0x00000020, "above": 0x00008000, "high": 0x00000080}
+
+
+def set_roblox_priority(level="high"):
+    """ตั้ง priority ของ Roblox ทุกโปรเซส — คืน (ทำได้ไหม, จำนวนที่ทำ)"""
+    from .win import roblox_pids
+    want = PRIORITY.get(level, PRIORITY["high"])
+    n = 0
+    for pid in roblox_pids():
+        h = k.OpenProcess(PROCESS_SET_INFORMATION, False, pid)
+        if not h:
+            continue
+        try:
+            if k.SetPriorityClass(h, want):
+                n += 1
+        finally:
+            k.CloseHandle(h)
+    return (n > 0), n
+
+
+def roblox_priority():
+    """priority ตอนนี้ของ Roblox ('high'/'above'/'normal'/None)"""
+    from .win import roblox_pids
+    PROCESS_QUERY_LIMITED = 0x1000
+    rev = {v: name for name, v in PRIORITY.items()}
+    for pid in roblox_pids():
+        h = k.OpenProcess(PROCESS_QUERY_LIMITED, False, pid)
+        if not h:
+            continue
+        try:
+            return rev.get(k.GetPriorityClass(h))
+        finally:
+            k.CloseHandle(h)
+    return None

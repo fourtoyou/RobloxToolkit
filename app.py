@@ -15,7 +15,7 @@ from tkinter import filedialog
 import customtkinter as ctk
 
 from core import analytics, charts, clicker, config, filecheck, health, ipc, launcher, macro, notify, schedule, servers, session, sysmon
-from core import fastflag, fpscap
+from core import fastflag, fpscap, ui
 from core.antiafk import Engine, reason_text
 from core.history import History, fmt_dur, fmt_reason
 from core.netmon import TARGETS, NetMonitor
@@ -33,13 +33,14 @@ except ImportError:
 dpi_aware()
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("green")
+ui.install()
 
-ACC, WARN, BAD, DIM, CARD = "#2ee6a8", "#ffc857", "#ff5d7a", "#8a8aa0", "#1c1c28"
-F = ("Segoe UI", 13)
-FB = ("Segoe UI", 13, "bold")
-FH = ("Segoe UI", 20, "bold")
-FS = ("Segoe UI", 11)
-LEVEL_COLOR = {"green": ACC, "yellow": "#d6d65a", "orange": WARN, "red": BAD, "gray": DIM, "ok": ACC, "warn": WARN, "bad": BAD}
+# สี/ฟอนต์ทั้งหมดอยู่ที่ core/ui.py — แก้ที่นั้นที่เดียวเปลี่ยนทั้งโปรแกรม
+from core.ui import (ACC, ACC2, ACC3, BAD, BADBG, BADT, BG, BTN, BTNH, CARD, CARD2, DANGER, DANGERH, DIM,
+                     F, FB, FBIG, FH, FH2, FH3, FHUGE, FMB, FS, FSB, FTINY, FTITLE, INFO, INK, LINE, MONO,
+                     OKBG, SIDE, TXT, TXT2, WARN, YEL)
+
+LEVEL_COLOR = {"green": ACC, "yellow": YEL, "orange": WARN, "red": BAD, "gray": DIM, "ok": ACC, "warn": WARN, "bad": BAD}
 STORE_PY = "WindowsApps" in sys.executable and not getattr(sys, "frozen", False)
 
 
@@ -84,13 +85,13 @@ class HomePage(Page):
 
     def __init__(self, master, app):
         super().__init__(master, app)
-        ctk.CTkLabel(self, text=f"Roblox Toolkit", font=("Segoe UI", 24, "bold"), text_color=ACC).pack(anchor="w", padx=22, pady=(16, 0))
+        ctk.CTkLabel(self, text=f"Roblox Toolkit", font=FTITLE, text_color=ACC).pack(anchor="w", padx=22, pady=(16, 0))
         ctk.CTkLabel(self, text="เลือกโหมดที่ตรงกับที่จะทำ แล้วกดปุ่มเดียวจบ — ปรับละเอียดได้ที่เมนูด้านซ้าย",
                      font=FS, text_color=DIM).pack(anchor="w", padx=22)
 
         st = ctk.CTkFrame(self, fg_color=CARD, corner_radius=14)
         st.pack(fill="x", padx=20, pady=12)
-        self.l_big = ctk.CTkLabel(st, text="กำลังตรวจสอบ...", font=("Segoe UI", 17, "bold"), justify="left")
+        self.l_big = ctk.CTkLabel(st, text="กำลังตรวจสอบ...", font=FH3, justify="left")
         self.l_big.pack(anchor="w", padx=18, pady=(14, 2))
         self.l_sub = ctk.CTkLabel(st, text="", font=F, text_color=DIM, justify="left")
         self.l_sub.pack(anchor="w", padx=18, pady=(0, 14))
@@ -98,22 +99,40 @@ class HomePage(Page):
         grid = ctk.CTkFrame(self, fg_color="transparent")
         grid.pack(fill="both", expand=True, padx=20)
         grid.grid_columnconfigure((0, 1), weight=1, uniform="p")
-        self.cards = {}
+        grid.grid_rowconfigure((0, 1), weight=1, uniform="q")
+        self.cards, self.btns = {}, {}
         for i, (name, icon, desc, _, _) in enumerate(self.PRESETS):
             f = ctk.CTkFrame(grid, fg_color=CARD, corner_radius=14, border_width=2, border_color=CARD)
             f.grid(row=i // 2, column=i % 2, sticky="nsew", padx=6, pady=6)
-            ctk.CTkLabel(f, text=f"{icon}  {name}", font=("Segoe UI", 16, "bold")).pack(anchor="w", padx=16, pady=(14, 2))
+            ctk.CTkLabel(f, text=f"{icon}  {name}", font=FH3).pack(anchor="w", padx=16, pady=(14, 2))
             ctk.CTkLabel(f, text=desc, font=FS, text_color=DIM, justify="left", wraplength=330).pack(anchor="w", padx=16)
-            ctk.CTkButton(f, text="ใช้โหมดนี้", height=36, font=FB, command=lambda n=name: self.apply(n)).pack(fill="x", padx=16, pady=(10, 14))
-            self.cards[name] = f
+            b = ctk.CTkButton(f, text="ใช้โหมดนี้", height=38, font=FB, fg_color=BTN, hover_color=BTNH,
+                              command=lambda n=name: self.apply(n))
+            b.pack(fill="x", padx=16, pady=(10, 16), side="bottom")
+            self.cards[name], self.btns[name] = f, b
+
+        # ---------- สรุปวันนี้ ----------
+        stat = ctk.CTkFrame(self, fg_color=CARD, corner_radius=14)
+        stat.pack(fill="x", padx=20, pady=(0, 10), before=grid)
+        stat.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="s")
+        self.stats = {}
+        for i, (key, label) in enumerate((("play", "เล่นวันนี้"), ("rounds", "จำนวนรอบ"),
+                                          ("drop", "หลุดวันนี้"), ("next", "คิวถัดไป"))):
+            cell = ctk.CTkFrame(stat, fg_color="transparent")
+            cell.grid(row=0, column=i, sticky="nsew", pady=(12, 10))
+            v = ctk.CTkLabel(cell, text="—", font=FH3, text_color=TXT)
+            v.pack()
+            ctk.CTkLabel(cell, text=label, font=FS, text_color=DIM).pack()
+            self.stats[key] = v
+        self._stat_at = 0
 
         row = ctk.CTkFrame(self, fg_color="transparent")
         row.pack(fill="x", padx=20, pady=(4, 14))
-        ctk.CTkButton(row, text="📸 ถ่ายรูปเกมส่งเข้า Discord", font=F, height=34, fg_color="#3a3a4e", hover_color="#4a4a60",
+        ctk.CTkButton(row, text="📸 ถ่ายรูปเกมส่งเข้า Discord", font=F, height=34, fg_color=BTN, hover_color=BTNH,
                       command=self.snap).pack(side="left", padx=(0, 8))
-        ctk.CTkButton(row, text="🔀 ย้ายไปเซิร์ฟคนน้อย", font=F, height=34, fg_color="#3a3a4e", hover_color="#4a4a60",
+        ctk.CTkButton(row, text="🔀 ย้ายไปเซิร์ฟคนน้อย", font=F, height=34, fg_color=BTN, hover_color=BTNH,
                       command=self.quiet).pack(side="left", padx=8)
-        ctk.CTkButton(row, text="🔄 รีเซ็ตตัวละคร", font=F, height=34, fg_color="#3a3a4e", hover_color="#4a4a60",
+        ctk.CTkButton(row, text="🔄 รีเซ็ตตัวละคร", font=F, height=34, fg_color=BTN, hover_color=BTNH,
                       command=lambda: threading.Thread(target=app.eng.reset_character, daemon=True).start()).pack(side="left", padx=8)
         self.l_hint = ctk.CTkLabel(self, text="", font=FS, text_color=DIM)
         self.l_hint.pack(anchor="w", padx=22, pady=(0, 10))
@@ -219,9 +238,29 @@ class HomePage(Page):
             bits.append(f"🔁 {nx[0]} → {nx[1]}")
         self.l_sub.configure(text="   ·   ".join(bits))
 
+        if time.time() - self._stat_at > 10:
+            self._stat_at = time.time()
+            try:
+                if app.hist.loading:
+                    self.stats["play"].configure(text="...")
+                else:
+                    sm = app.hist.summary(1)
+                    self.stats["play"].configure(text=fmt_dur(sm["total"]) if sm["total"] else "—")
+                    self.stats["rounds"].configure(text=str(sm["sessions"]))
+                    self.stats["drop"].configure(text=str(len(sm["disconnects"])),
+                                                 text_color=BAD if sm["disconnects"] else TXT)
+                nj = app.sched.next_job()
+                self.stats["next"].configure(text=(f"{nj[0]}  {nj[1]}" if nj else "—"),
+                                             font=FB if nj else FH3)
+            except Exception as ex:
+                config.dbg(f"home stats: {ex}")
+
         last = c.get("last_preset")
         for name, f in self.cards.items():
-            f.configure(border_color=ACC if name == last else CARD)
+            on = name == last
+            f.configure(border_color=ACC if on else CARD)
+            self.btns[name].configure(fg_color=ACC2 if on else BTN, hover_color=ACC3 if on else BTNH,
+                                      text="●  กำลังใช้โหมดนี้" if on else "ใช้โหมดนี้")
         self.l_hint.configure(text=f"โหมดล่าสุดที่ใช้: {last}" if last else "เคล็ดลับ: F8 เริ่ม/หยุด Anti-AFK ได้จากทุกที่ · F6 ออโต้คลิก · F9 overlay")
 
 
@@ -237,15 +276,25 @@ class AfkPage(Page):
         ctk.CTkLabel(self, text="ANTI-AFK", font=FH, text_color=ACC).pack(anchor="w", padx=20, pady=(16, 0))
         ctk.CTkLabel(self, text="F8 = เริ่ม/หยุด จากทุกที่", font=FS, text_color=DIM).pack(anchor="w", padx=20)
 
-        card = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
-        card.pack(fill="x", padx=20, pady=12)
+        # แบ่ง 2 คอลัมน์ ไม่งั้นเนื้อหายาวเกินจอ (ซ้าย = ควบคุม · ขวา = เวลา/ตาราง/log)
+        cols = ctk.CTkFrame(self, fg_color="transparent")
+        cols.pack(fill="both", expand=True, padx=16, pady=(10, 12))
+        cols.grid_columnconfigure((0, 1), weight=1, uniform="c")
+        cols.grid_rowconfigure(0, weight=1)
+        colL = ctk.CTkFrame(cols, fg_color="transparent")
+        colL.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        colR = ctk.CTkFrame(cols, fg_color="transparent")
+        colR.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+
+        card = ctk.CTkFrame(colL, fg_color=CARD, corner_radius=14)
+        card.pack(fill="x")
         self.l_found = ctk.CTkLabel(card, text="GAME: ...", font=FB)
         self.l_found.pack(pady=(14, 0))
         self.l_state = ctk.CTkLabel(card, text="SYSTEM: หยุด", font=FB, text_color=DIM)
         self.l_state.pack()
-        self.btn = ctk.CTkButton(card, text="เริ่มทำงาน", font=("Segoe UI", 16, "bold"), height=52, width=260,
+        self.btn = ctk.CTkButton(card, text="เริ่มทำงาน", font=FH3, height=52, width=260,
                                  fg_color="transparent", border_width=2, border_color=ACC, text_color=ACC,
-                                 hover_color="#1a2a24", command=app.toggle_afk)
+                                 hover_color=OKBG, command=app.toggle_afk)
         self.btn.pack(pady=10)
         self.l_next = ctk.CTkLabel(card, text="", font=FS, text_color=DIM)
         self.l_next.pack(pady=(0, 10))
@@ -270,66 +319,70 @@ class AfkPage(Page):
         for i, (k, t) in enumerate(labels.items()):
             ctk.CTkSwitch(g, text=t, variable=self.vars[k], command=app.sync_cfg, font=F).grid(row=i // 2, column=i % 2, sticky="w", padx=12, pady=3)
 
-        hide = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
-        hide.pack(fill="x", padx=20)
-        ctk.CTkLabel(hide, text="โหมดซ่อน — เร็วสุด ไม่กระพริบเลย: ย่อ Roblox ก่อน แล้วกดซ่อน", font=FS, text_color=DIM).pack(pady=(10, 2))
+        hide = ctk.CTkFrame(colL, fg_color=CARD, corner_radius=14)
+        hide.pack(fill="x", pady=(8, 0))
+        hr = ctk.CTkFrame(hide, fg_color="transparent")
+        hr.pack(fill="x", padx=14, pady=(10, 2))
+        ctk.CTkLabel(hr, text="โหมดซ่อน — เร็วสุด ไม่กระพริบเลย: ย่อ Roblox ก่อน แล้วกดซ่อน", font=FS, text_color=DIM).pack(side="left")
+        self.l_hidden = ctk.CTkLabel(hr, text="ซ่อนอยู่: 0", font=FS, text_color=DIM)
+        self.l_hidden.pack(side="right")
         hb = ctk.CTkFrame(hide, fg_color="transparent")
-        hb.pack(pady=(0, 10))
-        ctk.CTkButton(hb, text="ซ่อน Roblox ที่ย่ออยู่", width=170, command=self.hide, font=F).pack(side="left", padx=6)
-        ctk.CTkButton(hb, text="เอา Roblox กลับมา", width=170, fg_color="#3a3a4e", hover_color="#4a4a60", command=self.unhide, font=F).pack(side="left", padx=6)
-        ctk.CTkButton(hb, text="🔄 รีเซ็ตตัวละคร", width=140, font=F, fg_color="#3a3a4e", hover_color="#4a4a60",
-                      command=lambda: threading.Thread(target=app.eng.reset_character, daemon=True).start()).pack(side="left", padx=6)
-        self.l_hidden = ctk.CTkLabel(hb, text="ซ่อนอยู่: 0", font=FS, text_color=DIM)
-        self.l_hidden.pack(side="left", padx=10)
+        hb.pack(fill="x", padx=14, pady=(2, 12))
+        ctk.CTkButton(hb, text="ซ่อนเกม", command=self.hide, font=F, height=34).pack(side="left", fill="x", expand=True, padx=(0, 4))
+        ctk.CTkButton(hb, text="เอากลับมา", fg_color=BTN, hover_color=BTNH, command=self.unhide, font=F, height=34).pack(side="left", fill="x", expand=True, padx=4)
+        ctk.CTkButton(hb, text="🔄 รีเซ็ตตัวละคร", font=F, height=34, fg_color=BTN, hover_color=BTNH,
+                      command=lambda: threading.Thread(target=app.eng.reset_character, daemon=True).start()).pack(side="left", fill="x", expand=True, padx=(4, 0))
 
-        srv = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
-        srv.pack(fill="x", padx=20, pady=(8, 0))
-        sr = ctk.CTkFrame(srv, fg_color="transparent")
-        sr.pack(fill="x", padx=14, pady=8)
-        self.l_srv = ctk.CTkLabel(sr, text="🌐 เซิร์ฟ: —", font=F, justify="left")
-        self.l_srv.pack(side="left")
-        ctk.CTkButton(sr, text="🔀 ย้ายไปเซิร์ฟเงียบสุด", width=190, font=F, command=self.go_quiet).pack(side="right")
+        srv = ctk.CTkFrame(colL, fg_color=CARD, corner_radius=14)
+        srv.pack(fill="x", pady=(8, 0))
+        self.l_srv = ctk.CTkLabel(srv, text="🌐 เซิร์ฟ: —", font=F, justify="left", anchor="w", wraplength=430)
+        self.l_srv.pack(fill="x", padx=14, pady=(10, 4))
+        ctk.CTkButton(srv, text="🔀  ย้ายไปเซิร์ฟที่คนน้อยสุด", font=F, height=34, command=self.go_quiet).pack(fill="x", padx=14, pady=(0, 12))
 
-        tm = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
-        tm.pack(fill="x", padx=20, pady=(8, 0))
+        tm = ctk.CTkFrame(colR, fg_color=CARD, corner_radius=14)
+        tm.pack(fill="x")
         row = ctk.CTkFrame(tm, fg_color="transparent")
-        row.pack(pady=8)
-        ctk.CTkLabel(row, text="⏰ ตั้งเวลา: อีก", font=F).pack(side="left", padx=(6, 4))
+        row.pack(fill="x", padx=14, pady=(10, 2))
+        ctk.CTkLabel(row, text="⏰  ตั้งเวลา: อีก", font=FB).pack(side="left")
         self.v_tmin = ctk.StringVar(value="60")
-        ctk.CTkEntry(row, textvariable=self.v_tmin, width=60, font=F, justify="center").pack(side="left")
-        ctk.CTkLabel(row, text="นาที →", font=F).pack(side="left", padx=4)
-        self.v_taction = ctk.StringVar(value="หยุด Anti-AFK")
-        ctk.CTkOptionMenu(row, values=list(App.TIMER_ACTIONS), variable=self.v_taction, font=F, width=210).pack(side="left", padx=4)
-        self.bt_timer = ctk.CTkButton(row, text="เริ่มนับ", width=90, font=F, command=self.toggle_timer)
-        self.bt_timer.pack(side="left", padx=6)
+        ctk.CTkEntry(row, textvariable=self.v_tmin, width=54, font=F, justify="center").pack(side="left", padx=6)
+        ctk.CTkLabel(row, text="นาที แล้วให้…", font=F).pack(side="left")
         self.l_timer = ctk.CTkLabel(row, text="", font=FS, text_color=DIM)
-        self.l_timer.pack(side="left", padx=6)
+        self.l_timer.pack(side="right")
+        row = ctk.CTkFrame(tm, fg_color="transparent")
+        row.pack(fill="x", padx=14, pady=(2, 12))
+        self.v_taction = ctk.StringVar(value="หยุด Anti-AFK")
+        ctk.CTkOptionMenu(row, values=list(App.TIMER_ACTIONS), variable=self.v_taction, font=F).pack(side="left", fill="x", expand=True)
+        self.bt_timer = ctk.CTkButton(row, text="เริ่มนับ", width=92, font=F, command=self.toggle_timer)
+        self.bt_timer.pack(side="left", padx=(8, 0))
 
-        sc = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
-        sc.pack(fill="x", padx=20, pady=(8, 0))
+        sc = ctk.CTkFrame(colR, fg_color=CARD, corner_radius=14)
+        sc.pack(fill="x", pady=(8, 0))
         row = ctk.CTkFrame(sc, fg_color="transparent")
         row.pack(fill="x", padx=14, pady=(8, 2))
-        ctk.CTkLabel(row, text="🔁 ตารางเวลา (ทำซ้ำทุกวัน)", font=FB).pack(side="left")
-        self.l_next = ctk.CTkLabel(row, text="", font=FS, text_color=DIM)
-        self.l_next.pack(side="left", padx=10)
+        ctk.CTkLabel(row, text="🔁  ตารางเวลา (ทำซ้ำทุกวัน)", font=FB).pack(side="left")
+        # ชื่อ l_sched ห้ามซ้ำกับ l_next ของการ์ดหลัก ไม่งั้นตัวหลังทับตัวแรก (บั๊กเดิม)
+        self.l_sched = ctk.CTkLabel(sc, text="", font=FS, text_color=DIM, justify="left", wraplength=420)
+        self.l_sched.pack(anchor="w", padx=14, pady=(0, 2))
         row = ctk.CTkFrame(sc, fg_color="transparent")
         row.pack(fill="x", padx=14, pady=(0, 4))
         ctk.CTkLabel(row, text="เวลา", font=F).pack(side="left")
-        self.e_sctime = ctk.CTkEntry(row, width=64, font=F, justify="center", placeholder_text="23:00")
+        self.e_sctime = ctk.CTkEntry(row, width=62, font=F, justify="center", placeholder_text="23:00")
         self.e_sctime.pack(side="left", padx=6)
         self.v_scact = ctk.StringVar(value=schedule.ACTIONS[0])
-        ctk.CTkOptionMenu(row, values=list(schedule.ACTIONS), variable=self.v_scact, font=F, width=210).pack(side="left", padx=4)
-        ctk.CTkButton(row, text="+ เพิ่ม", width=74, font=F, command=self.add_job).pack(side="left", padx=6)
+        ctk.CTkOptionMenu(row, values=list(schedule.ACTIONS), variable=self.v_scact, font=F).pack(side="left", fill="x", expand=True, padx=4)
+        ctk.CTkButton(row, text="+ เพิ่ม", width=72, font=F, command=self.add_job).pack(side="left")
         self.sc_list = ctk.CTkFrame(sc, fg_color="transparent")
         self.sc_list.pack(fill="x", padx=14, pady=(0, 8))
 
-        bottom = ctk.CTkFrame(self, fg_color="transparent")
-        bottom.pack(fill="both", expand=True, padx=20, pady=12)
-        self.log = ctk.CTkTextbox(bottom, height=150, font=("Consolas", 11), fg_color="#0c0c12", text_color=DIM)
-        self.log.pack(side="left", fill="both", expand=True)
+        bottom = ctk.CTkFrame(colR, fg_color="transparent")
+        bottom.pack(fill="both", expand=True, pady=(8, 0))
+        self.log = ctk.CTkTextbox(bottom, height=150, font=MONO, fg_color=INK, text_color=DIM)
+        self.log.pack(fill="both", expand=True)
         self.log.configure(state="disabled")
-        pv = ctk.CTkFrame(bottom, fg_color=CARD, corner_radius=12, width=300)
-        pv.pack(side="left", fill="y", padx=(10, 0))
+        # พรีวิวย้ายมาอยู่คอลัมน์ซ้าย ใต้การ์ดควบคุม จะได้ไม่เบียดกับ log
+        pv = ctk.CTkFrame(colL, fg_color=CARD, corner_radius=14, height=196)
+        pv.pack(fill="x", pady=(8, 0))
         pv.pack_propagate(False)
         self.v_preview = ctk.BooleanVar(value=False)
         ctk.CTkSwitch(pv, text="👁 พรีวิวหน้าจอ Roblox", variable=self.v_preview, font=FS, command=self.tick_preview).pack(anchor="w", padx=10, pady=(8, 2))
@@ -385,8 +438,8 @@ class AfkPage(Page):
             v = ctk.BooleanVar(value=job.get("on", True))
             ctk.CTkSwitch(r, text="", width=38, variable=v, command=lambda j=job, vv=v: self.toggle_job(j, vv)).pack(side="left")
             ctk.CTkLabel(r, text=job["time"], font=FB, width=52, text_color=ACC if job.get("on", True) else DIM).pack(side="left")
-            ctk.CTkLabel(r, text="→  " + job["action"], font=F, text_color="#d0d0e0" if job.get("on", True) else DIM).pack(side="left")
-            ctk.CTkButton(r, text="ลบ", width=40, height=24, font=FS, fg_color="#5a2a34", hover_color="#7a3a46",
+            ctk.CTkLabel(r, text="→  " + job["action"], font=F, text_color=TXT2 if job.get("on", True) else DIM).pack(side="left")
+            ctk.CTkButton(r, text="ลบ", width=40, height=24, font=FS, fg_color=DANGER, hover_color=DANGERH,
                           command=lambda j=job: self.del_job(j)).pack(side="right")
 
     def toggle_timer(self):
@@ -496,9 +549,9 @@ class AfkPage(Page):
         nx = self.app.sched.next_job()
         if nx:
             t, act, mins = nx
-            self.l_next.configure(text=f"ถัดไป: {t} → {act} (อีก {mins // 60} ชม. {mins % 60} นาที)" if mins >= 60 else f"ถัดไป: {t} → {act} (อีก {mins} นาที)")
+            self.l_sched.configure(text=f"ถัดไป: {t} → {act} (อีก {mins // 60} ชม. {mins % 60} นาที)" if mins >= 60 else f"ถัดไป: {t} → {act} (อีก {mins} นาที)")
         else:
-            self.l_next.configure(text="")
+            self.l_sched.configure(text="ยังไม่ได้ตั้งตารางเวลา")
         if self.app.timer_end:
             r = max(0, int(self.app.timer_end - time.time()))
             self.l_timer.configure(text=f"เหลือ {r // 60:02d}:{r % 60:02d} → {self.app.timer_action}", text_color=WARN)
@@ -525,16 +578,16 @@ class ClickPage(Page):
         ctk.CTkLabel(self, text="ออโต้คลิก", font=FH, text_color=ACC).pack(anchor="w", padx=20, pady=(14, 0))
         ctk.CTkLabel(self, text="F6 = เริ่ม/หยุด  ·  F7 = เก็บตำแหน่งที่เมาส์ชี้อยู่", font=FS, text_color=DIM).pack(anchor="w", padx=20)
 
-        warn = ctk.CTkFrame(self, fg_color="#2a1f1f", corner_radius=10, border_width=1, border_color=BAD)
+        warn = ctk.CTkFrame(self, fg_color=BADBG, corner_radius=10, border_width=1, border_color=BAD)
         warn.pack(fill="x", padx=20, pady=(8, 0))
         ctk.CTkLabel(warn, text="⚠  เกมแนวคลิกเกอร์/ซิมูเลเตอร์หลายเกมมีระบบจับการคลิกอัตโนมัติ ถ้าจับได้ = โดนแบนเกมนั้น · การสุ่มจังหวะไม่ได้การันตีอะไร",
-                     font=FS, text_color="#ffb3c0", justify="left").pack(anchor="w", padx=12, pady=6)
+                     font=FS, text_color=BADT, justify="left").pack(anchor="w", padx=12, pady=6)
 
         top = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
         top.pack(fill="x", padx=20, pady=8)
-        self.btn = ctk.CTkButton(top, text="เริ่มคลิก (F6)", font=("Segoe UI", 15, "bold"), height=46, width=210,
+        self.btn = ctk.CTkButton(top, text="เริ่มคลิก (F6)", font=FMB, height=46, width=210,
                                  fg_color="transparent", border_width=2, border_color=ACC, text_color=ACC,
-                                 hover_color="#1a2a24", command=lambda: app.click.toggle())
+                                 hover_color=OKBG, command=lambda: app.click.toggle())
         self.btn.pack(side="left", padx=14, pady=10)
         self.l_stat = ctk.CTkLabel(top, text="", font=FS, text_color=DIM, justify="left")
         self.l_stat.pack(side="left", padx=10)
@@ -592,7 +645,7 @@ class ClickPage(Page):
         r = ctk.CTkFrame(pt, fg_color="transparent")
         r.pack(fill="x", padx=16, pady=(0, 8))
         ctk.CTkButton(r, text="📍 เก็บตำแหน่งเมาส์ (F7)", width=190, font=F, command=lambda: app.click.add_point()).pack(side="left")
-        ctk.CTkButton(r, text="ล้างจุดทั้งหมด", width=120, font=F, fg_color="#3a3a4e", hover_color="#4a4a60", command=self.clear_points).pack(side="left", padx=8)
+        ctk.CTkButton(r, text="ล้างจุดทั้งหมด", width=120, font=F, fg_color=BTN, hover_color=BTNH, command=self.clear_points).pack(side="left", padx=8)
         self.v_restore = ctk.BooleanVar(value=c["click_restore_cursor"])
         ctk.CTkSwitch(r, text="เอาเมาส์กลับที่เดิมหลังคลิก", variable=self.v_restore, command=app.sync_cfg, font=FS).pack(side="left", padx=10)
         self.l_points = ctk.CTkLabel(pt, text="", font=FS, text_color=DIM, justify="left")
@@ -622,7 +675,7 @@ class ClickPage(Page):
         mc = self.card(body, "🎬 อัดมาโคร — อัดเมาส์+ปุ่มพร้อมจังหวะเวลา แล้วเล่นซ้ำ (F4 อัด · F5 เล่น)")
         r = ctk.CTkFrame(mc, fg_color="transparent")
         r.pack(fill="x", padx=16, pady=(0, 6))
-        self.bt_rec = ctk.CTkButton(r, text="● เริ่มอัด (F4)", width=140, font=F, fg_color="#5a2a34", hover_color="#7a3a46",
+        self.bt_rec = ctk.CTkButton(r, text="● เริ่มอัด (F4)", width=140, font=F, fg_color=DANGER, hover_color=DANGERH,
                                     command=lambda: app.toggle_record())
         self.bt_rec.pack(side="left")
         self.bt_play = ctk.CTkButton(r, text="▶ เล่น (F5)", width=110, font=F, command=lambda: app.play_macro())
@@ -630,7 +683,7 @@ class ClickPage(Page):
         self.v_macro = ctk.StringVar(value="")
         self.opt_macro = ctk.CTkOptionMenu(r, values=["—"], variable=self.v_macro, font=F, width=170, command=lambda _: self.show_macro())
         self.opt_macro.pack(side="left", padx=6)
-        ctk.CTkButton(r, text="ลบ", width=46, font=F, fg_color="#5a2a34", hover_color="#7a3a46",
+        ctk.CTkButton(r, text="ลบ", width=46, font=F, fg_color=DANGER, hover_color=DANGERH,
                       command=self.del_macro).pack(side="left")
         r = ctk.CTkFrame(mc, fg_color="transparent")
         r.pack(fill="x", padx=16, pady=(0, 6))
@@ -655,7 +708,7 @@ class ClickPage(Page):
         self.e_prof = ctk.CTkEntry(r, width=140, font=F, placeholder_text="ตั้งชื่อแล้วกดบันทึก")
         self.e_prof.pack(side="left", padx=(12, 5))
         ctk.CTkButton(r, text="บันทึก", width=70, font=F, command=self.save_profile).pack(side="left")
-        ctk.CTkButton(r, text="ลบ", width=50, font=F, fg_color="#5a2a34", hover_color="#7a3a46", command=self.del_profile).pack(side="left", padx=5)
+        ctk.CTkButton(r, text="ลบ", width=50, font=F, fg_color=DANGER, hover_color=DANGERH, command=self.del_profile).pack(side="left", padx=5)
         self.upd_cps()
         self.refresh_points()
         self.refresh_profiles()
@@ -663,7 +716,7 @@ class ClickPage(Page):
 
     # ---------- helper ----------
     def card(self, parent, title):
-        ctk.CTkLabel(parent, text=title, font=FB, text_color="#c8c8dc").pack(anchor="w", padx=8, pady=(8, 2))
+        ctk.CTkLabel(parent, text=title, font=FB, text_color=TXT2).pack(anchor="w", padx=8, pady=(8, 2))
         f = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=12)
         f.pack(fill="x", padx=6)
         ctk.CTkLabel(f, text="", height=2).pack()
@@ -688,7 +741,7 @@ class ClickPage(Page):
         hint = "  ·  คนกดเร็วสุดราวๆ 10-14 ครั้ง/วิ" if n > 14 else ""
         if n > 60:
             hint += "  ·  เกมอ่านอินพุตทีละเฟรม 60 fps รับได้จริงราว 60 ครั้ง/วิ ที่เกินมักถูกทิ้ง"
-        self.l_cps.configure(text=f"ความเร็ว: {n} ครั้ง/วินาที{hint}", text_color=WARN if n > 14 else "#d0d0e0")
+        self.l_cps.configure(text=f"ความเร็ว: {n} ครั้ง/วินาที{hint}", text_color=WARN if n > 14 else TXT2)
 
     def clear_points(self):
         self.app.cfg["click_points"].clear()
@@ -777,7 +830,7 @@ class ClickPage(Page):
         app = self.app
         self.bt_rec.configure(text="⏹ หยุดอัด (F4)" if app.rec else "● เริ่มอัด (F4)")
         self.bt_play.configure(text=("⏹ หยุด (F5)" if app.mplay else "▶ เล่น (F5)"),
-                               fg_color=BAD if app.mplay else ["#2FA572", "#2FA572"])
+                               fg_color=BAD if app.mplay else [ACC2, ACC2])
         cl = self.app.click
         if cl.running:
             dur = max(0.001, time.time() - cl.started_at)
@@ -809,7 +862,7 @@ class SysPage(Page):
             f = ctk.CTkFrame(row, fg_color=CARD, corner_radius=12)
             f.pack(side="left", fill="both", expand=True, padx=4)
             ctk.CTkLabel(f, text=title, font=FS, text_color=DIM).pack(pady=(10, 0))
-            v = ctk.CTkLabel(f, text="—", font=("Segoe UI", 26, "bold"))
+            v = ctk.CTkLabel(f, text="—", font=FBIG)
             v.pack()
             sub = ctk.CTkLabel(f, text="", font=FS, text_color=DIM)
             sub.pack(pady=(0, 10))
@@ -818,7 +871,7 @@ class SysPage(Page):
         gf = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
         gf.pack(fill="x", padx=20)
         ctk.CTkLabel(gf, text="20 นาทีล่าสุด   —   เขียว CPU · ฟ้า RAM · ส้ม GPU · แดง อุณหภูมิ GPU", font=FS, text_color=DIM).pack(anchor="w", padx=14, pady=(8, 0))
-        self.canvas = ctk.CTkCanvas(gf, height=150, bg="#12121a", highlightthickness=0)
+        self.canvas = ctk.CTkCanvas(gf, height=150, bg=INK, highlightthickness=0)
         self.canvas.pack(fill="x", padx=14, pady=10)
 
         fc = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
@@ -847,18 +900,18 @@ class SysPage(Page):
         left = ctk.CTkFrame(bot, fg_color=CARD, corner_radius=12)
         left.pack(side="left", fill="both", expand=True)
         ctk.CTkLabel(left, text="กินแรมมากสุด", font=FB).pack(anchor="w", padx=14, pady=(10, 2))
-        self.l_top = ctk.CTkLabel(left, text="", font=("Consolas", 11), text_color="#d0d0e0", justify="left")
+        self.l_top = ctk.CTkLabel(left, text="", font=MONO, text_color=TXT2, justify="left")
         self.l_top.pack(anchor="w", padx=14, pady=(0, 10))
         right = ctk.CTkFrame(bot, fg_color=CARD, corner_radius=12, width=330)
         right.pack(side="left", fill="y", padx=(10, 0))
         right.pack_propagate(False)
         ctk.CTkLabel(right, text="อื่นๆ", font=FB).pack(anchor="w", padx=14, pady=(10, 2))
-        self.l_misc = ctk.CTkLabel(right, text="", font=F, text_color="#d0d0e0", justify="left")
+        self.l_misc = ctk.CTkLabel(right, text="", font=F, text_color=TXT2, justify="left")
         self.l_misc.pack(anchor="w", padx=14)
         self.v_game = ctk.BooleanVar(value=app.cfg["game_mode"])
         ctk.CTkSwitch(right, text="โหมดเล่นเกม: เปิด Roblox แล้วคายโมเดล AI คืน VRAM", variable=self.v_game,
                       font=FS, command=app.sync_cfg).pack(anchor="w", padx=14, pady=(8, 0))
-        ctk.CTkButton(right, text="คายโมเดล AI ตอนนี้", width=170, font=FS, fg_color="#3a3a4e", hover_color="#4a4a60",
+        ctk.CTkButton(right, text="คายโมเดล AI ตอนนี้", width=170, font=FS, fg_color=BTN, hover_color=BTNH,
                       command=self.free_now).pack(anchor="w", padx=14, pady=(4, 2))
         self.v_alerts = ctk.BooleanVar(value=app.cfg["sys_alerts"])
         ctk.CTkSwitch(right, text="เตือนเมื่อร้อน/แรมตึง", variable=self.v_alerts, font=FS, command=app.sync_cfg).pack(anchor="w", padx=14, pady=(10, 4))
@@ -932,8 +985,8 @@ class SysPage(Page):
         w = max(cv.winfo_width(), 200)
         h = 150
         for frac in (0.25, 0.5, 0.75):
-            cv.create_line(0, h * frac, w, h * frac, fill="#22222e")
-        for key, col, mx in (("cpu", ACC, 100), ("ram", "#5aa9e6", 100), ("gpu", WARN, 100), ("gpu_temp", BAD, 100)):
+            cv.create_line(0, h * frac, w, h * frac, fill=CARD2)
+        for key, col, mx in (("cpu", ACC, 100), ("ram", INFO, 100), ("gpu", WARN, 100), ("gpu_temp", BAD, 100)):
             pts = [(t, v) for t, v in m.series(key, 1200) if v is not None]
             if len(pts) < 2:
                 continue
@@ -955,7 +1008,7 @@ class AnalyticsPage(Page):
         head = ctk.CTkFrame(self, fg_color="transparent")
         head.pack(fill="x", padx=20, pady=(16, 4))
         ctk.CTkLabel(head, text="วิเคราะห์การเล่น", font=FH, text_color=ACC).pack(side="left")
-        ctk.CTkButton(head, text="📤 แชร์การ์ด", width=110, font=F, fg_color="#3a3a4e", hover_color="#4a4a60",
+        ctk.CTkButton(head, text="📤 แชร์การ์ด", width=110, font=F, fg_color=BTN, hover_color=BTNH,
                       command=self.share).pack(side="right", padx=(6, 0))
         ctk.CTkButton(head, text="โหลดใหม่", width=90, font=F, command=lambda: self.build(True)).pack(side="right", padx=6)
         self.seg = ctk.CTkSegmentedButton(head, values=["7 วัน", "30 วัน", "90 วัน", "ทั้งหมด"], command=lambda _: self.build(), font=F)
@@ -1025,7 +1078,7 @@ class AnalyticsPage(Page):
             r = ctk.CTkFrame(self.ins, fg_color="transparent")
             r.pack(fill="x", padx=14, pady=3)
             ctk.CTkLabel(r, text=icon, font=F, width=26).pack(side="left")
-            ctk.CTkLabel(r, text=txt, font=F, text_color="#d8d8e8", justify="left", anchor="w").pack(side="left", fill="x", expand=True)
+            ctk.CTkLabel(r, text=txt, font=F, text_color=TXT, justify="left", anchor="w").pack(side="left", fill="x", expand=True)
         self.l_note.configure(text=note)
 
     def share(self):
@@ -1053,13 +1106,13 @@ class StatsPage(Page):
         head.pack(fill="x", padx=20, pady=(16, 4))
         ctk.CTkLabel(head, text="สถิติการเล่น", font=FH, text_color=ACC).pack(side="left")
         ctk.CTkButton(head, text="โหลดใหม่", width=90, font=F, command=lambda: self.load(True)).pack(side="right")
-        ctk.CTkButton(head, text="📤 แชร์การ์ดสัปดาห์", width=150, font=F, fg_color="#3a3a4e", hover_color="#4a4a60", command=self.share).pack(side="right", padx=6)
+        ctk.CTkButton(head, text="📤 แชร์การ์ดสัปดาห์", width=150, font=F, fg_color=BTN, hover_color=BTNH, command=self.share).pack(side="right", padx=6)
         self.seg = ctk.CTkSegmentedButton(head, values=["วันนี้", "7 วัน", "30 วัน", "ทั้งหมด"], command=lambda _: self.render(), font=F)
         self.seg.set("7 วัน")
         self.seg.pack(side="right", padx=10)
         self.l_sum = ctk.CTkLabel(self, text="กำลังอ่าน log ของ Roblox...", font=F, text_color=DIM)
         self.l_sum.pack(anchor="w", padx=20)
-        self.canvas = ctk.CTkCanvas(self, height=120, bg="#12121a", highlightthickness=0)
+        self.canvas = ctk.CTkCanvas(self, height=120, bg=INK, highlightthickness=0)
         self.canvas.pack(fill="x", padx=20, pady=8)
         body = ctk.CTkFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=20, pady=(0, 12))
@@ -1110,7 +1163,7 @@ class StatsPage(Page):
         days = {"วันนี้": 1, "7 วัน": 7, "30 วัน": 30, "ทั้งหมด": None}[self.seg.get()]
         s = self.app.hist.summary(days)
         self.l_sum.configure(text=f"รวม {fmt_dur(s['total'])}  ·  {s['sessions']} เซสชัน  ·  หลุด {len(s['disconnects'])} ครั้ง"
-                                  + ("  ·  " + time.strftime("%d/%m/%Y") if days == 1 else ""), text_color="#e8e8f0")
+                                  + ("  ·  " + time.strftime("%d/%m/%Y") if days == 1 else ""), text_color=TXT)
         for w in self.games.winfo_children() + self.disc.winfo_children():
             w.destroy()
         top = s["games"][:12]
@@ -1142,10 +1195,10 @@ class StatsPage(Page):
         for i, (d, sec) in enumerate(data):
             x0 = 20 + i * bw + 4
             bh = (sec / mx) * (h - 34)
-            c.create_rectangle(x0, h - 20 - bh, x0 + bw - 8, h - 20, fill=ACC if i == len(data) - 1 else "#2a7a5e", outline="")
-            c.create_text(x0 + (bw - 8) / 2, h - 10, text=d.strftime("%d/%m"), fill=DIM, font=("Segoe UI", 8))
+            c.create_rectangle(x0, h - 20 - bh, x0 + bw - 8, h - 20, fill=ACC if i == len(data) - 1 else ACC2, outline="")
+            c.create_text(x0 + (bw - 8) / 2, h - 10, text=d.strftime("%d/%m"), fill=DIM, font=FTINY)
             if sec > 0:
-                c.create_text(x0 + (bw - 8) / 2, h - 26 - bh, text=f"{sec / 3600:.1f}", fill="#e8e8f0", font=("Segoe UI", 8))
+                c.create_text(x0 + (bw - 8) / 2, h - 26 - bh, text=f"{sec / 3600:.1f}", fill=TXT, font=FTINY)
         c.create_text(20, 10, text="ชั่วโมงที่เล่นต่อวัน (14 วัน)", fill=DIM, font=FS, anchor="w")
 
 
@@ -1170,7 +1223,7 @@ class NetPage(Page):
         self.l_server = ctk.CTkLabel(self, text="", font=F, text_color=DIM)
         self.l_server.pack(anchor="w", padx=20, pady=(8, 0))
         ctk.CTkLabel(self, text="เหตุการณ์ล่าสุด (เน็ตหลุด / หลุดจากเกม)", font=FB).pack(anchor="w", padx=20, pady=(8, 2))
-        self.events = ctk.CTkTextbox(self, font=("Consolas", 11), fg_color="#0c0c12", text_color=DIM)
+        self.events = ctk.CTkTextbox(self, font=MONO, fg_color=INK, text_color=DIM)
         self.events.pack(fill="both", expand=True, padx=20, pady=(0, 12))
 
     def tick(self):
@@ -1223,16 +1276,16 @@ class FilePage(Page):
         self.entry.pack(side="left", fill="x", expand=True)
         ctk.CTkButton(row, text="เลือกไฟล์...", width=110, font=F, command=self.pick).pack(side="left", padx=6)
         ctk.CTkButton(row, text="ตรวจ", width=80, font=F, command=self.check).pack(side="left")
-        ctk.CTkButton(row, text="สแกน Downloads", width=130, font=F, fg_color="#3a3a4e", hover_color="#4a4a60", command=self.scan_downloads).pack(side="left", padx=6)
+        ctk.CTkButton(row, text="สแกน Downloads", width=130, font=F, fg_color=BTN, hover_color=BTNH, command=self.scan_downloads).pack(side="left", padx=6)
         self.banner = ctk.CTkLabel(self, text="", font=FB, fg_color=CARD, corner_radius=10, height=44)
         self.banner.pack(fill="x", padx=20)
-        self.out = ctk.CTkTextbox(self, font=("Consolas", 11), fg_color="#0c0c12", text_color="#d0d0e0")
+        self.out = ctk.CTkTextbox(self, font=MONO, fg_color=INK, text_color=TXT2)
         self.out.pack(fill="both", expand=True, padx=20, pady=10)
         b = ctk.CTkFrame(self, fg_color="transparent")
         b.pack(fill="x", padx=20, pady=(0, 12))
         self.bt_vt = ctk.CTkButton(b, text="เปิดใน VirusTotal", font=F, state="disabled", command=self.open_vt)
         self.bt_vt.pack(side="left")
-        self.bt_copy = ctk.CTkButton(b, text="คัดลอก SHA-256", font=F, fg_color="#3a3a4e", hover_color="#4a4a60", state="disabled", command=self.copy_sha)
+        self.bt_copy = ctk.CTkButton(b, text="คัดลอก SHA-256", font=F, fg_color=BTN, hover_color=BTNH, state="disabled", command=self.copy_sha)
         self.bt_copy.pack(side="left", padx=6)
         self.res = None
 
@@ -1385,7 +1438,7 @@ class GamesPage(Page):
         f = ctk.CTkFrame(self.list, fg_color=CARD, corner_radius=12)
         f.pack(fill="x", padx=8, pady=5)
         f.columnconfigure(1, weight=1)
-        img = ctk.CTkLabel(f, text="🎮", font=("Segoe UI", 28), width=72, height=72)
+        img = ctk.CTkLabel(f, text="🎮", font=FHUGE, width=72, height=72)
         img.grid(row=0, column=0, rowspan=2, padx=12, pady=10)
         name = ctk.CTkLabel(f, text=fav["name"], font=FB, anchor="w")
         name.grid(row=0, column=1, sticky="w", pady=(12, 0))
@@ -1395,13 +1448,13 @@ class GamesPage(Page):
         btns.grid(row=0, column=2, rowspan=2, padx=12)
         place = fav["place"]
         ctk.CTkButton(btns, text="▶ เข้าเกม", width=96, font=F, command=lambda: (launcher.launch(place), self.app.log(f"เปิดเกม {fav['name']}"))).pack(side="left", padx=3)
-        ctk.CTkButton(btns, text="📶 ping ต่ำสุด", width=110, font=F, fg_color="#3a3a4e", hover_color="#4a4a60",
+        ctk.CTkButton(btns, text="📶 ping ต่ำสุด", width=110, font=F, fg_color=BTN, hover_color=BTNH,
                       command=lambda: launcher.launch_best(place, self.app.log)).pack(side="left", padx=3)
         eng = self.app.eng
         if eng.last_place == place and eng.last_job:
-            ctk.CTkButton(btns, text="↩ เซิร์ฟล่าสุด", width=110, font=F, fg_color="#3a3a4e", hover_color="#4a4a60",
+            ctk.CTkButton(btns, text="↩ เซิร์ฟล่าสุด", width=110, font=F, fg_color=BTN, hover_color=BTNH,
                           command=lambda: (launcher.launch(place, eng.last_job), self.app.log("กลับเซิร์ฟล่าสุด"))).pack(side="left", padx=3)
-        ctk.CTkButton(btns, text="✕", width=32, font=F, fg_color="transparent", hover_color="#4a2a34", text_color=DIM,
+        ctk.CTkButton(btns, text="✕", width=32, font=F, fg_color="transparent", hover_color=BADBG, text_color=DIM,
                       command=lambda: (launcher.remove_fav(place), self.refresh())).pack(side="left", padx=3)
         self.icons[place] = (img, name, meta)
 
@@ -1464,10 +1517,10 @@ class HistoryPage(Page):
             f.pack(fill="x", padx=10, pady=1)
             ctk.CTkLabel(f, text=f"{time.strftime('%H:%M', time.localtime(sess['start']))}–{time.strftime('%H:%M', time.localtime(sess['end']))}", font=FS, text_color=DIM, width=110, anchor="w").pack(side="left")
             ctk.CTkLabel(f, text=self.app.hist.name(sess["place"])[:36], font=F, anchor="w", width=300).pack(side="left")
-            ctk.CTkLabel(f, text=fmt_dur(sess["end"] - sess["start"]), font=FS, text_color="#e8e8f0", width=100, anchor="w").pack(side="left")
+            ctk.CTkLabel(f, text=fmt_dur(sess["end"] - sess["start"]), font=FS, text_color=TXT, width=100, anchor="w").pack(side="left")
             r = sess["reason"]
             ctk.CTkLabel(f, text=fmt_reason(r), font=FS, text_color=BAD if r not in (None, 0, -1, 285) else DIM, anchor="w", width=160).pack(side="left")
-            ctk.CTkButton(f, text="🖼", width=36, height=26, font=FS, fg_color="#2a2a3a", hover_color="#3a3a4e", command=lambda s_=sess: self.card(s_)).pack(side="right")
+            ctk.CTkButton(f, text="🖼", width=36, height=26, font=FS, fg_color=CARD2, hover_color=BTN, command=lambda s_=sess: self.card(s_)).pack(side="right")
 
     def card(self, sess):
         def work():
@@ -1484,108 +1537,248 @@ class HistoryPage(Page):
 
 # =====================================================================
 class FlagPage(Page):
-    """FastFlag — เขียน ClientAppSettings.json ให้ Roblox เอง ไม่ต้องพึ่ง Bloxstrap"""
+    """FastFlag — เขียน ClientAppSettings.json ให้ Roblox เอง ไม่ต้องพึ่ง Bloxstrap
+
+    ทำใหม่ตาม allowlist ของ Roblox (29 ก.ย. 2025): flag ที่ไม่อยู่ในลิสต์ ใส่ไปก็ถูกเมิน
+    เลยเหลือ "ระดับความแรง 5 ระดับ + ตัวเร่งกราฟิก + สวิตช์เสริม" แทนการติ๊กชุดมั่วๆ
+    แล้วเตือนทันทีถ้าผู้ใช้พิมพ์ flag ที่ตายแล้ว (พวกลิสต์เก่าตามเว็บ)
+    """
 
     def __init__(self, master, app):
         super().__init__(master, app)
         c = app.cfg
-        head = ctk.CTkFrame(self, fg_color="transparent")
-        head.pack(fill="x", padx=20, pady=(16, 2))
-        ctk.CTkLabel(head, text="FastFlag", font=FH, text_color=ACC).pack(side="left")
-        ctk.CTkButton(head, text="เช็คใหม่", width=90, font=F, command=self.refresh).pack(side="right")
-        ctk.CTkLabel(self, text="สวิตช์ภายในของ Roblox เอง (ตัวเดียวกับที่ Bloxstrap ตั้งให้) — ไม่ใช่การโกง ไม่โดนแบน แต่ใส่มั่วอาจทำเกมพัง มีปุ่มล้างให้",
-                     font=FS, text_color=DIM, wraplength=780, justify="left").pack(anchor="w", padx=20)
+        right = ui.head(self, "FastFlag — ปรับความลื่นของเกม",
+                        "สวิตช์ภายในของ Roblox เอง (ตัวเดียวกับที่ Bloxstrap ตั้งให้) · ไม่ใช่โปรแกรมโกง · กดล้างคืนได้ทุกเมื่อ", "⚡")
+        ui.ghost(right, "⟳  เช็คใหม่", self.refresh, width=108).pack(side="right")
 
-        self.l_state = ctk.CTkLabel(self, text="", font=F, fg_color=CARD, corner_radius=10, height=48, justify="left", anchor="w")
-        self.l_state.pack(fill="x", padx=20, pady=10)
+        box = ui.card(self)
+        box.pack(fill="x", padx=22, pady=(2, 10))
+        self.l_state = ctk.CTkLabel(box, text="กำลังตรวจ...", font=FB, justify="left", anchor="w")
+        self.l_state.pack(fill="x", padx=16, pady=(12, 0))
+        self.l_state2 = ctk.CTkLabel(box, text="", font=FS, text_color=DIM, justify="left", anchor="w", wraplength=700)
+        self.l_state2.pack(fill="x", padx=16, pady=(2, 12))
+
+        # แถบปุ่มล่าง — ต้อง pack ก่อนตัว body ที่ expand=True
+        bar = ctk.CTkFrame(self, fg_color=CARD2, corner_radius=0)
+        bar.pack(fill="x", side="bottom")
+        inner = ui.row(bar)
+        inner.pack(fill="x", padx=20, pady=12)
+        ui.big(inner, "✅  ใช้ค่านี้", self.apply, width=140).pack(side="left")
+        ui.tip(ui.ghost(inner, "⚡  ตั้งให้เร็ว (แนะนำ)", self.recommend, height=42, width=176), "ตั้งระดับ 'แรง' + ปิดหญ้า + ปิดลบรอยหยัก + ให้เกมได้ CPU ก่อน แล้วเขียนให้เลย").pack(side="left", padx=8)
+        ui.danger_btn(inner, "🗑  ล้างทั้งหมด", self.clear, height=42, width=134).pack(side="left")
+        self.v_auto = ctk.BooleanVar(value=c.get("ff_auto", True))
+        ctk.CTkSwitch(inner, text="ใส่ให้ใหม่เองเมื่อ Roblox อัปเดต", variable=self.v_auto, font=FS,
+                      command=self.set_auto).pack(side="right", padx=(10, 0))
+        self.l_cnt = ctk.CTkLabel(inner, text="", font=FS, text_color=DIM)
+        self.l_cnt.pack(side="right", padx=12)
 
         body = ctk.CTkScrollableFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=14)
 
-        fp = ctk.CTkFrame(body, fg_color=CARD, corner_radius=12)
-        fp.pack(fill="x", padx=6, pady=(0, 8))
-        r = ctk.CTkFrame(fp, fg_color="transparent")
-        r.pack(anchor="w", padx=14, pady=10)
-        ctk.CTkLabel(r, text="🎯 ปลดล็อก FPS:", font=FB).pack(side="left")
-        self.v_fps = ctk.StringVar(value=c["ff_fps"])
-        ctk.CTkOptionMenu(r, values=list(fastflag.FPS_CHOICES), variable=self.v_fps, font=F, width=120).pack(side="left", padx=8)
-        ctk.CTkLabel(r, text="(ค่าเริ่มต้นของ Roblox คือ 60 — ตั้งให้ตรงกับจอจะลื่นสุด)", font=FS, text_color=DIM).pack(side="left")
+        # ---------- 1 · ระดับความแรง ----------
+        lv = ui.card(body)
+        lv.pack(fill="x", padx=6, pady=(0, 10))
+        ui.title(lv, "1 · แรงแค่ไหน")
+        self.disp = {f"{ic}  {nm}": nm for nm, ic, _g, _l, _f in fastflag.LEVELS}
+        self.rdisp = {v: k for k, v in self.disp.items()}
+        cur_lv = c.get("ff_level") if c.get("ff_level") in self.rdisp else "ปิด"
+        self.v_level = ctk.StringVar(value=self.rdisp[cur_lv])
+        ctk.CTkSegmentedButton(lv, values=list(self.disp), variable=self.v_level, font=FB, height=44,
+                               command=lambda _=None: self.on_pick()).pack(fill="x", padx=14, pady=(2, 10))
+        self.l_gain = ctk.CTkLabel(lv, text="", font=F, text_color=ACC, justify="left", anchor="w", wraplength=660)
+        self.l_gain.pack(fill="x", padx=16)
+        self.l_lose = ctk.CTkLabel(lv, text="", font=FS, text_color=WARN, justify="left", anchor="w", wraplength=660)
+        self.l_lose.pack(fill="x", padx=16, pady=(3, 14))
 
-        pr = ctk.CTkFrame(body, fg_color=CARD, corner_radius=12)
-        pr.pack(fill="x", padx=6, pady=(0, 8))
-        ctk.CTkLabel(pr, text="ชุดสำเร็จรูป (ติ๊กได้หลายอัน)", font=FB).pack(anchor="w", padx=14, pady=(10, 2))
-        self.v_pre = {}
-        for name, flags in fastflag.PRESETS.items():
-            v = ctk.BooleanVar(value=name in (c["ff_presets"] or []))
-            self.v_pre[name] = v
-            ctk.CTkSwitch(pr, text=f"{name}   ({len(flags)} flag)", variable=v, font=F).pack(anchor="w", padx=16, pady=2)
-        ctk.CTkLabel(pr, text="", height=4).pack()
+        # ---------- 2 · ตัวเร่งกราฟิก ----------
+        ap = ui.card(body)
+        ap.pack(fill="x", padx=6, pady=(0, 10))
+        ui.title(ap, "2 · ตัวเร่งกราฟิก")
+        r = ui.row(ap)
+        r.pack(fill="x", padx=14, pady=(0, 2))
+        self.v_api = ctk.StringVar(value=c.get("ff_api") if c.get("ff_api") in fastflag.APIS else fastflag.API_NAMES[0])
+        ctk.CTkOptionMenu(r, values=fastflag.API_NAMES, variable=self.v_api, font=F, width=340,
+                          command=lambda _=None: self.on_pick()).pack(side="left")
+        ui.note(ap, "การ์ดจอ NVIDIA หลายรุ่นลื่นขึ้นกับ Vulkan (ลองก่อนได้เลย) · ถ้าเปิดเกมแล้วจอดำหรือเด้ง ให้กลับมาเลือก DirectX 11 หรือกดล้างทั้งหมด",
+                wraplength=680).pack(anchor="w", padx=16, pady=(4, 14))
 
-        cu = ctk.CTkFrame(body, fg_color=CARD, corner_radius=12)
-        cu.pack(fill="x", padx=6, pady=(0, 8))
-        ctk.CTkLabel(cu, text='พิมพ์เอง (JSON) — เช่น  {"FFlagชื่อ": "True"}', font=FB).pack(anchor="w", padx=14, pady=(10, 2))
-        self.t_custom = ctk.CTkTextbox(cu, height=90, font=("Consolas", 11))
-        self.t_custom.pack(fill="x", padx=14, pady=(0, 10))
-        self.t_custom.insert("1.0", c["ff_custom"] or "")
+        # ---------- 3 · สวิตช์เสริม ----------
+        ex = ui.card(body)
+        ex.pack(fill="x", padx=6, pady=(0, 10))
+        ui.title(ex, "3 · เพิ่มเติม (ไม่ติ๊กก็ได้)")
+        have = c.get("ff_extras") or []
+        self.v_ex = {}
+        for key, (label, hint, _f) in fastflag.EXTRAS.items():
+            v = ctk.BooleanVar(value=key in have)
+            self.v_ex[key] = v
+            ui.switch_row(ex, label, v, hint, cmd=self.on_pick)
+        ctk.CTkLabel(ex, text="", height=6).pack()
 
-        act = ctk.CTkFrame(body, fg_color="transparent")
-        act.pack(fill="x", padx=6, pady=(0, 6))
-        ctk.CTkButton(act, text="✅ ใช้ค่าเหล่านี้", height=38, font=FB, command=self.apply).pack(side="left")
-        ctk.CTkButton(act, text="🗑 ล้าง FastFlag ทั้งหมด", height=38, font=F, fg_color="#5a2a34", hover_color="#7a3a46",
-                      command=self.clear).pack(side="left", padx=8)
-        self.v_auto = ctk.BooleanVar(value=c["ff_auto"])
-        ctk.CTkSwitch(act, text="ใส่ให้ใหม่อัตโนมัติเมื่อ Roblox อัปเดตเวอร์ชัน", variable=self.v_auto, font=FS,
-                      command=lambda: (self.app.cfg.__setitem__("ff_auto", self.v_auto.get()), config.save(self.app.cfg))).pack(side="left", padx=10)
+        # ---------- 4 · เร่งแบบไม่ใช้ FastFlag ----------
+        pr = ui.card(body)
+        pr.pack(fill="x", padx=6, pady=(0, 10))
+        ui.title(pr, "4 · เร่งเพิ่มแบบไม่ใช้ FastFlag")
+        self.v_pri = ctk.BooleanVar(value=bool(c.get("ff_priority")))
+        ui.switch_row(pr, "ให้ Roblox ได้ CPU ก่อนโปรแกรมอื่น (High priority)", self.v_pri,
+                      "ยก priority ของโปรเซสเกม → Windows แบ่ง CPU ให้เกมก่อน Chrome/Discord "
+                      "ไม่ยุ่งกับข้อมูลในเกมเลย และโปรแกรมจะคอยตั้งให้ใหม่ทุกครั้งที่เปิดเกม", cmd=self.set_pri)
+        self.l_pri = ctk.CTkLabel(pr, text="", font=FS, text_color=DIM, anchor="w")
+        self.l_pri.pack(fill="x", padx=(68, 16))
+        ui.note(pr, "ℹ ปลดล็อก FPS ทาง FastFlag ใช้ไม่ได้แล้ว (Roblox ปิดตั้งแต่ 29 ก.ย. 2025) — ตั้งในเกมเอง: ESC → Settings → Frame Rate "
+                    "เลือกได้ถึง 240 · ถ้าอยาก 'หรี่' FPS ตอนทิ้งฟาร์มไว้ ใช้หน้า 🖥 เครื่อง",
+                wraplength=680).pack(anchor="w", padx=16, pady=(8, 14))
 
-        self.l_now = ctk.CTkLabel(body, text="", font=("Consolas", 11), text_color=DIM, justify="left", anchor="w")
-        self.l_now.pack(fill="x", padx=8, pady=(6, 14))
+        # ---------- 5 · ขั้นสูง ----------
+        adv = ui.card(body)
+        adv.pack(fill="x", padx=6, pady=(0, 10))
+        r = ui.row(adv)
+        r.pack(fill="x", padx=14, pady=(12, 0))
+        ctk.CTkLabel(r, text="5 · พิมพ์ flag เอง (ขั้นสูง)", font=FB).pack(side="left")
+        self.bt_adv = ui.ghost(r, "เปิด", self.toggle_adv, width=72, height=28)
+        self.bt_adv.pack(side="right")
+        self.adv_box = ui.row(adv)
+        self.t_custom = ctk.CTkTextbox(self.adv_box, height=92, font=MONO)
+        self.t_custom.pack(fill="x", pady=(8, 4))
+        self.t_custom.insert("1.0", c.get("ff_custom") or "")
+        ui.note(self.adv_box, 'รูปแบบ: { "ชื่อflag": "ค่า" } — ถ้าใส่ flag ที่ Roblox ไม่อนุญาต โปรแกรมจะบอกให้ (ลิสต์เก่าตามเว็บส่วนใหญ่ใช้ไม่ได้แล้ว)',
+                 wraplength=660).pack(anchor="w")
+        ui.ghost(self.adv_box, "ตรวจที่พิมพ์", self.on_pick, width=110, height=28).pack(anchor="w", pady=(6, 0))
+        self.adv_open = False
+        ctk.CTkLabel(adv, text="", height=8).pack()
+
+        self.l_warn = ctk.CTkLabel(body, text="", font=FS, text_color=WARN, justify="left", anchor="w", wraplength=700)
+        self.l_warn.pack(fill="x", padx=22, pady=(0, 6))
+        self.l_now = ctk.CTkLabel(body, text="", font=MONO, text_color=DIM, justify="left", anchor="w", wraplength=700)
+        self.l_now.pack(fill="x", padx=22, pady=(0, 16))
+        if (c.get("ff_custom") or "").strip():
+            self.toggle_adv()
+
+    # ---------- ตัวช่วย ----------
+    def toggle_adv(self):
+        self.adv_open = not self.adv_open
+        if self.adv_open:
+            self.adv_box.pack(fill="x", padx=14, pady=(0, 4))
+            self.bt_adv.configure(text="ซ่อน")
+        else:
+            self.adv_box.pack_forget()
+            self.bt_adv.configure(text="เปิด")
+
+    def level_name(self):
+        return self.disp.get(self.v_level.get(), "ปิด")
+
+    def gather(self):
+        return fastflag.build(self.level_name(), self.v_api.get(),
+                              [k for k, v in self.v_ex.items() if v.get()],
+                              self.t_custom.get("1.0", "end"))
 
     def on_show(self):
         self.refresh()
+        self.on_pick()
+
+    def on_pick(self):
+        """อัปเดตคำอธิบาย/คำเตือนทุกครั้งที่เปลี่ยนตัวเลือก (ยังไม่เขียนไฟล์)"""
+        i = fastflag.level_index(self.level_name())
+        _nm, _ic, gain, lose, _f = fastflag.LEVELS[i]
+        self.l_gain.configure(text="✔  " + gain)
+        self.l_lose.configure(text=("✖  " + lose) if i else "")
+        flags, err, bad = self.gather()
+        if err:
+            self.l_warn.configure(text="⚠  " + err, text_color=BAD)
+        elif bad:
+            self.l_warn.configure(text="⚠  Roblox จะเมิน flag เหล่านี้ (ใส่ได้แต่ไม่มีผล):   "
+                                       + "     ".join(f"{k} — {why}" for k, why in bad), text_color=WARN)
+        else:
+            self.l_warn.configure(text="")
+        live = len([k for k in flags if k in fastflag.ALLOWLIST])
+        self.l_cnt.configure(text=f"จะเขียน {len(flags)} flag (ใช้ได้จริง {live})" if flags else "ยังไม่ได้เลือกอะไร")
 
     def refresh(self):
-        flags, vdir = fastflag.current()
+        flags, _vdir = fastflag.current()
         dirs = fastflag.version_dirs()
         if not dirs:
-            self.l_state.configure(text="  ⚠ ไม่เจอ Roblox เวอร์ชันปกติ — เวอร์ชัน Microsoft Store/Xbox ตั้ง FastFlag ไม่ได้ (ไฟล์อยู่ในโฟลเดอร์ที่เขียนไม่ได้)",
-                                   text_color=WARN)
+            self.l_state.configure(text="⚠   เครื่องนี้ตั้ง FastFlag ไม่ได้", text_color=WARN)
+            self.l_state2.configure(text="เครื่องนี้ใช้ Roblox เวอร์ชัน Microsoft Store/Xbox ซึ่งไฟล์เกมอยู่ในโฟลเดอร์ที่ Windows ห้ามเขียน "
+                                         "— ถ้าอยากใช้ FastFlag ต้องลง Roblox ตัวปกติจาก roblox.com (สวิตช์ในข้อ 4 ยังใช้ได้ปกติ)")
         elif flags:
-            self.l_state.configure(text=f"  🟢 มี FastFlag ทำงานอยู่ {len(flags)} ตัว  ·  เจอ Roblox {len(dirs)} เวอร์ชัน", text_color=ACC)
+            live = len([k for k in flags if k in fastflag.ALLOWLIST])
+            dead = len(flags) - live
+            self.l_state.configure(text=f"🟢   มี FastFlag อยู่ {len(flags)} ตัว · ใช้ได้จริง {live} ตัว"
+                                        + (f" · ถูกเมิน {dead} ตัว" if dead else ""), text_color=ACC)
+            self.l_state2.configure(text=f"เจอ Roblox {len(dirs)} เวอร์ชัน (ใส่ให้ทุกเวอร์ชัน) · แก้แล้วต้องปิด-เปิดเกมใหม่ค่าถึงจะมีผล")
         else:
-            self.l_state.configure(text=f"  ⚪ ยังไม่มี FastFlag เลย  ·  เจอ Roblox {len(dirs)} เวอร์ชัน (ตั้งแล้วจะใส่ให้ทุกเวอร์ชัน)", text_color=DIM)
-        self.l_now.configure(text=("ที่มีผลอยู่ตอนนี้:" + NL + NL.join(f"   {k} = {v}" for k, v in flags.items())) if flags else "")
+            self.l_state.configure(text="⚪   ยังไม่ได้ตั้ง FastFlag", text_color=DIM)
+            self.l_state2.configure(text=f"เจอ Roblox {len(dirs)} เวอร์ชัน — เลือกระดับแล้วกด 'ใช้ค่านี้' โปรแกรมจะใส่ให้ทุกเวอร์ชัน")
+        pri = fpscap.roblox_priority()
+        name = {"high": "High (สูง)", "above": "Above normal", "normal": "ปกติ"}.get(pri)
+        self.l_pri.configure(text=("ตอนนี้ Roblox อยู่ที่ priority: " + name) if name else "ยังไม่ได้เปิดเกม — จะตั้งให้ตอนเปิด")
+        self.l_now.configure(text=("ที่มีผลอยู่ตอนนี้:   " + "     ".join(f"{k}={v}" for k, v in flags.items())) if flags else "")
 
-    def gather(self):
-        names = [n for n, v in self.v_pre.items() if v.get()]
-        return fastflag.build(names, self.v_fps.get(), self.t_custom.get("1.0", "end"))
-
+    # ---------- ปุ่ม ----------
     def apply(self):
-        flags, err = self.gather()
+        flags, err, bad = self.gather()
         if err:
             return self.app.log("⚠ " + err)
-        if not flags:
-            return self.app.log("ยังไม่ได้เลือกอะไรเลย — ติ๊กชุดสำเร็จรูปหรือตั้ง FPS ก่อน")
-        n, msg = fastflag.write(flags)
         c = self.app.cfg
-        c["ff_presets"] = [n2 for n2, v in self.v_pre.items() if v.get()]
-        c["ff_fps"] = self.v_fps.get()
+        c["ff_level"], c["ff_api"] = self.level_name(), self.v_api.get()
+        c["ff_extras"] = [k for k, v in self.v_ex.items() if v.get()]
         c["ff_custom"] = self.t_custom.get("1.0", "end").strip()
         config.save(c)
-        self.app.log(f"⚙ ตั้ง FastFlag {len(flags)} ตัว — {msg}")
-        notify.toast("FastFlag", f"ตั้ง {len(flags)} ตัวแล้ว — ปิด-เปิด Roblox ใหม่ค่าถึงจะมีผล")
+        if not flags:
+            n = fastflag.clear()
+            self.app.log(f"เลือกระดับ 'ปิด' — ล้าง FastFlag ออกให้แล้ว ({n} เวอร์ชัน)")
+        else:
+            n, msg = fastflag.write(flags)
+            self.app.log(f"⚡ ตั้ง FastFlag ระดับ '{self.level_name()}' {len(flags)} ตัว — {msg}")
+            if n:
+                notify.toast("FastFlag", f"ตั้ง {len(flags)} ตัวแล้ว — ปิด-เปิด Roblox ใหม่ค่าถึงจะมีผล")
+        if bad:
+            self.app.log(f"⚠ มี {len(bad)} flag ที่ Roblox ไม่อนุญาตให้ตั้งเอง — เขียนลงไปแล้วแต่เกมจะไม่สนใจ")
         self.refresh()
+        self.on_pick()
+
+    def recommend(self):
+        """ตั้งค่าที่ได้ FPS เยอะสุดโดยยังเล่นเกมรู้เรื่อง"""
+        self.v_level.set(self.rdisp["แรง"])
+        self.v_api.set(fastflag.API_NAMES[0])
+        for k, v in self.v_ex.items():
+            v.set(k in ("nograss", "noaa"))
+        self.v_pri.set(True)
+        self.set_pri()
+        self.apply()
+        self.app.log("⚡ ใช้ค่าแนะนำแล้ว: ระดับแรง + ปิดหญ้า + ปิดลบรอยหยัก + ให้เกมได้ CPU ก่อน · อยากลื่นกว่านี้ลองระดับ 'โหดสุด' หรือสลับเป็น Vulkan")
 
     def clear(self):
         n = fastflag.clear()
-        for v in self.v_pre.values():
+        self.v_level.set(self.rdisp["ปิด"])
+        self.v_api.set(fastflag.API_NAMES[0])
+        for v in self.v_ex.values():
             v.set(False)
-        self.v_fps.set("ไม่ตั้ง")
         self.t_custom.delete("1.0", "end")
         c = self.app.cfg
-        c["ff_presets"], c["ff_fps"], c["ff_custom"] = [], "ไม่ตั้ง", ""
+        c["ff_level"], c["ff_api"], c["ff_extras"], c["ff_custom"] = "ปิด", fastflag.API_NAMES[0], [], ""
         config.save(c)
         self.app.log(f"🗑 ล้าง FastFlag แล้ว ({n} เวอร์ชัน) — ปิด-เปิดเกมใหม่จะกลับเป็นค่าเดิมของ Roblox")
         self.refresh()
+        self.on_pick()
+
+    def set_pri(self):
+        c = self.app.cfg
+        c["ff_priority"] = self.v_pri.get()
+        config.save(c)
+
+        def work():
+            on = c["ff_priority"]
+            _ok, n = fpscap.set_roblox_priority("high" if on else "normal")
+            if n:
+                self.app.log(f"⚡ ตั้ง priority ของ Roblox เป็น {'High' if on else 'ปกติ'} แล้ว ({n} โปรเซส)")
+            else:
+                self.app.log("ยังไม่ได้เปิดเกม — จะตั้ง priority ให้ตอนเปิดเกม" if on else "ปิดการยก priority แล้ว")
+            self.app.ui(self.refresh)
+        threading.Thread(target=work, daemon=True).start()
+
+    def set_auto(self):
+        self.app.cfg["ff_auto"] = self.v_auto.get()
+        config.save(self.app.cfg)
 
 
 # =====================================================================
@@ -1604,7 +1797,7 @@ class HealthPage(Page):
         b = ctk.CTkFrame(self, fg_color="transparent")
         b.pack(fill="x", padx=20)
         ctk.CTkButton(b, text="ซ่อม Bloxstrap (handler + shortcut)", font=F, command=self.fix).pack(side="left")
-        ctk.CTkButton(b, text="ล้าง log เก่ากว่า 7 วัน", font=F, fg_color="#3a3a4e", hover_color="#4a4a60", command=self.clean).pack(side="left", padx=6)
+        ctk.CTkButton(b, text="ล้าง log เก่ากว่า 7 วัน", font=F, fg_color=BTN, hover_color=BTNH, command=self.clean).pack(side="left", padx=6)
         self.v_auto = ctk.BooleanVar(value=health.autostart_get())
         self.v_bs = ctk.BooleanVar(value=health.bloxstrap_integration_get())
         ctk.CTkSwitch(self, text="เปิด Toolkit พร้อม Windows (ซ่อนใน tray)", variable=self.v_auto, font=F, command=self.toggle_auto).pack(anchor="w", padx=24, pady=(14, 4))
@@ -1649,9 +1842,11 @@ class SettingsPage(Page):
     def __init__(self, master, app):
         super().__init__(master, app)
         c = app.cfg
-        ctk.CTkLabel(self, text="ตั้งค่า", font=FH, text_color=ACC).pack(anchor="w", padx=20, pady=(16, 8))
-        card = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
-        card.pack(fill="x", padx=20)
+        ctk.CTkLabel(self, text="ตั้งค่า", font=FH, text_color=ACC).pack(anchor="w", padx=22, pady=(18, 6))
+        body = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=14)
+        card = ctk.CTkFrame(body, fg_color=CARD, corner_radius=14)
+        card.pack(fill="x", padx=6)
         ctk.CTkLabel(card, text="แจ้งเตือนเข้า Discord (webhook)", font=FB).pack(anchor="w", padx=14, pady=(12, 0))
         ctk.CTkLabel(card, text="Discord → ตั้งค่าห้อง → Integrations → Webhooks → New → Copy URL แล้ววางที่นี่ (URL นี้เก็บในเครื่องคุณเท่านั้น)", font=FS, text_color=DIM).pack(anchor="w", padx=14)
         r = ctk.CTkFrame(card, fg_color="transparent")
@@ -1690,8 +1885,8 @@ class SettingsPage(Page):
         self.v_corner = ctk.StringVar(value=c["overlay_corner"])
         ctk.CTkOptionMenu(rowc, values=["top-right", "top-left", "bottom-right", "bottom-left"], variable=self.v_corner, command=lambda _: app.sync_cfg(), font=F, width=140).pack(side="left")
         ctk.CTkLabel(card, text="", height=6).pack()
-        info = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
-        info.pack(fill="x", padx=20, pady=12)
+        info = ctk.CTkFrame(body, fg_color=CARD, corner_radius=14)
+        info.pack(fill="x", padx=6, pady=12)
         ctk.CTkLabel(info, text=f"Roblox Toolkit v{config.VERSION}", font=FB).pack(anchor="w", padx=14, pady=(12, 0))
         ctk.CTkLabel(info, text=f"ข้อมูล/ตั้งค่าเก็บที่ {config.DATA_DIR}\nโปรแกรมไม่ส่งข้อมูลออกนอกเครื่อง ยกเว้น: ชื่อเกม (Roblox API), ที่ตั้งเซิร์ฟ (ipinfo ถ้าเปิด), และ webhook ที่คุณตั้งเอง",
                      font=FS, text_color=DIM, justify="left").pack(anchor="w", padx=14, pady=(2, 8))
@@ -1703,20 +1898,20 @@ class SettingsPage(Page):
                      font=FS, text_color=DIM).pack(anchor="w", padx=44)
         io = ctk.CTkFrame(card, fg_color="transparent")
         io.pack(anchor="w", padx=14, pady=(4, 8))
-        ctk.CTkButton(io, text="⬆ ส่งออกค่าตั้งทั้งหมด", width=170, font=F, fg_color="#3a3a4e", hover_color="#4a4a60", command=self.export_cfg).pack(side="left")
-        ctk.CTkButton(io, text="⬇ นำเข้าค่าตั้ง", width=140, font=F, fg_color="#3a3a4e", hover_color="#4a4a60", command=self.import_cfg).pack(side="left", padx=8)
+        ctk.CTkButton(io, text="⬆ ส่งออกค่าตั้งทั้งหมด", width=170, font=F, fg_color=BTN, hover_color=BTNH, command=self.export_cfg).pack(side="left")
+        ctk.CTkButton(io, text="⬇ นำเข้าค่าตั้ง", width=140, font=F, fg_color=BTN, hover_color=BTNH, command=self.import_cfg).pack(side="left", padx=8)
         self.l_io = ctk.CTkLabel(io, text="", font=FS, text_color=DIM)
         self.l_io.pack(side="left", padx=6)
 
         rr = ctk.CTkFrame(info, fg_color="transparent")
         rr.pack(anchor="w", padx=14, pady=(0, 12))
-        ctk.CTkButton(rr, text="เปิดโฟลเดอร์ข้อมูล", font=F, fg_color="#3a3a4e", hover_color="#4a4a60", command=lambda: os.startfile(config.DATA_DIR) if os.path.isdir(config.DATA_DIR) else None).pack(side="left")
+        ctk.CTkButton(rr, text="เปิดโฟลเดอร์ข้อมูล", font=F, fg_color=BTN, hover_color=BTNH, command=lambda: os.startfile(config.DATA_DIR) if os.path.isdir(config.DATA_DIR) else None).pack(side="left")
         self.e_repo = ctk.CTkEntry(rr, font=F, width=220, placeholder_text="GitHub repo เช่น user/RobloxToolkit")
         self.e_repo.insert(0, c["update_repo"])
         self.e_repo.pack(side="left", padx=(12, 6))
         ctk.CTkButton(rr, text="เช็คอัปเดต", width=100, font=F, command=self.check_update).pack(side="left")
-        self.l_upd = ctk.CTkLabel(self, text="", font=F, text_color=DIM)
-        self.l_upd.pack(anchor="w", padx=20)
+        self.l_upd = ctk.CTkLabel(body, text="", font=F, text_color=DIM)
+        self.l_upd.pack(anchor="w", padx=22, pady=(0, 10))
 
     def export_cfg(self):
         self.app.sync_cfg()
@@ -1784,15 +1979,20 @@ class SettingsPage(Page):
 # =====================================================================
 class App(ctk.CTk):
     TIMER_ACTIONS = ("หยุด Anti-AFK", "ปิด Roblox", "ปิด Roblox + Sleep เครื่อง", "ปิดเครื่อง")
-    NAV = [("home", "🏠  หน้าแรก"), ("afk", "🎮  Anti-AFK"), ("games", "🚀  เกมโปรด"), ("click", "🖱  ออโต้คลิก"), ("stats", "📊  สถิติ"), ("analytics", "📈  วิเคราะห์"), ("sys", "🖥  เครื่อง"), ("history", "🕘  ประวัติ"), ("net", "📶  เน็ต"),
-           ("flag", "⚙  FastFlag"), ("file", "🛡  ตรวจไฟล์"), ("health", "🩺  สุขภาพระบบ"), ("settings", "⚙  ตั้งค่า")]
+    # ("#", "ชื่อกลุ่ม") = หัวข้อคั่น ไม่ใช่ปุ่ม
+    NAV = [("#", "ใช้งาน"), ("home", "🏠   หน้าแรก"), ("afk", "🎮   Anti-AFK"), ("games", "🚀   เกมโปรด"), ("click", "🖱   ออโต้คลิก"),
+           ("#", "ความลื่น"), ("flag", "⚡   FastFlag"), ("sys", "🖥   เครื่อง"), ("net", "📶   เน็ต"),
+           ("#", "ย้อนดู"), ("stats", "📊   สถิติ"), ("analytics", "📈   วิเคราะห์"), ("history", "🕘   ประวัติ"),
+           ("#", "อื่นๆ"), ("file", "🛡   ตรวจไฟล์"), ("health", "🩺   สุขภาพระบบ"), ("settings", "⚙   ตั้งค่า")]
 
     def __init__(self, args):
         super().__init__()
         self.title("Roblox Toolkit")
-        self.geometry("940x640")
-        self.minsize(900, 600)
+        self.geometry("1120x780")
+        self.minsize(1000, 640)
         self.cfg = config.load()
+        if fastflag.migrate(self.cfg):      # ผู้ใช้เคยติ๊กชุดแบบเก่าไว้ → แปลงเป็นระดับ
+            config.save(self.cfg)
         self.q = queue.Queue()
         self.log_lines = deque(maxlen=300)   # ให้ Discord bot ดึงไปดูได้ (/afk log)
         self.game_events = []
@@ -1826,18 +2026,41 @@ class App(ctk.CTk):
         self.ipc.start()
         config.dbg(f"app init ok v{config.VERSION}")
 
-        self.side = ctk.CTkFrame(self, width=190, corner_radius=0, fg_color="#0e0e16")
+        self.side = ctk.CTkFrame(self, width=212, corner_radius=0, fg_color=SIDE)
         self.side.pack(side="left", fill="y")
-        ctk.CTkLabel(self.side, text="ROBLOX\nTOOLKIT", font=("Segoe UI", 18, "bold"), text_color=ACC, justify="left").pack(anchor="w", padx=18, pady=(20, 14))
+        self.side.pack_propagate(False)
+        brand = ctk.CTkFrame(self.side, fg_color="transparent")
+        brand.pack(fill="x", padx=16, pady=(14, 6))
+        ctk.CTkLabel(brand, text="⬢", font=FH2, text_color=ACC).pack(side="left", padx=(0, 9))
+        bx = ctk.CTkFrame(brand, fg_color="transparent")
+        bx.pack(side="left")
+        ctk.CTkLabel(bx, text="Roblox Toolkit", font=FH3, text_color=TXT).pack(anchor="w")
+        ctk.CTkLabel(bx, text="v" + config.VERSION, font=FTINY, text_color=DIM).pack(anchor="w")
+        # ปุ่มล่างต้อง pack ก่อนเมนู เพราะเมนู expand=True จะกินที่เหลือทั้งหมด
+        ctk.CTkButton(self.side, text="ซ่อนลง tray", font=FS, height=30, fg_color=CARD, hover_color=CARD2,
+                      text_color=TXT2, command=self.to_tray).pack(side="bottom", fill="x", padx=14, pady=(6, 12))
+        self.l_mini = ctk.CTkLabel(self.side, text="", font=FS, text_color=DIM, justify="left")
+        self.l_mini.pack(side="bottom", anchor="w", padx=18, pady=(4, 4))
+        self.dot = ctk.CTkLabel(self.side, text="  ○  กำลังเริ่ม", font=FSB, text_color=DIM, fg_color=CARD,
+                                corner_radius=999, height=28, anchor="w")
+        self.dot.pack(side="bottom", fill="x", padx=14, pady=(8, 0))
+
+        nav = ctk.CTkScrollableFrame(self.side, fg_color="transparent", scrollbar_button_color=SIDE,
+                                     scrollbar_button_hover_color=BTN)
+        nav.pack(fill="both", expand=True, padx=0, pady=0)
         self.navbtn = {}
         for key, text in self.NAV:
-            b = ctk.CTkButton(self.side, text=text, anchor="w", font=F, height=40, fg_color="transparent",
-                              hover_color="#1c1c28", text_color="#d0d0e0", command=lambda k=key: self.show(k))
-            b.pack(fill="x", padx=10, pady=2)
-            self.navbtn[key] = b
-        self.l_mini = ctk.CTkLabel(self.side, text="", font=FS, text_color=DIM, justify="left")
-        self.l_mini.pack(side="bottom", anchor="w", padx=18, pady=14)
-        ctk.CTkButton(self.side, text="ซ่อนลง tray", font=FS, height=28, fg_color="#1c1c28", hover_color="#2a2a3a", command=self.to_tray).pack(side="bottom", fill="x", padx=10, pady=(0, 6))
+            if key == "#":
+                ctk.CTkLabel(nav, text=text.upper(), font=FTINY, text_color=DIM).pack(anchor="w", padx=16, pady=(8, 2))
+                continue
+            wrap = ctk.CTkFrame(nav, fg_color="transparent")
+            wrap.pack(fill="x", padx=6, pady=1)
+            bar = ctk.CTkFrame(wrap, width=3, height=26, fg_color="transparent", corner_radius=3)
+            bar.pack(side="left", fill="y", padx=(0, 5))
+            b = ctk.CTkButton(wrap, text=text, anchor="w", font=F, height=30, corner_radius=9, fg_color="transparent",
+                              hover_color=CARD, text_color=TXT2, command=lambda k=key: self.show(k))
+            b.pack(side="left", fill="x", expand=True)
+            self.navbtn[key] = (b, bar)
 
         self.container = ctk.CTkFrame(self, fg_color="transparent")
         self.container.pack(side="left", fill="both", expand=True)
@@ -1894,10 +2117,14 @@ class App(ctk.CTk):
     def show(self, key):
         if self.current:
             self.pages[self.current].pack_forget()
-            self.navbtn[self.current].configure(fg_color="transparent", text_color="#d0d0e0")
+            b, bar = self.navbtn[self.current]
+            b.configure(fg_color="transparent", text_color=TXT2, font=F)
+            bar.configure(fg_color="transparent")
         self.current = key
         self.pages[key].pack(fill="both", expand=True)
-        self.navbtn[key].configure(fg_color="#1c1c28", text_color=ACC)
+        b, bar = self.navbtn[key]
+        b.configure(fg_color=CARD, text_color=ACC, font=FB)
+        bar.configure(fg_color=ACC)
         self.pages[key].on_show()
 
     # ---------- cfg ----------
@@ -2172,11 +2399,11 @@ class App(ctk.CTk):
         c = self.cfg
         if not c.get("ff_auto"):
             return
-        flags, err = fastflag.build(c.get("ff_presets") or [], c.get("ff_fps", "ไม่ตั้ง"), c.get("ff_custom", ""))
+        flags, err, _bad = fastflag.build(c.get("ff_level") or "ปิด", c.get("ff_api") or "อัตโนมัติ",
+                                          c.get("ff_extras") or [], c.get("ff_custom", ""))
         if err or not flags:
             return
-        missing = [d for d in fastflag.version_dirs() if fastflag.read(d) != flags]
-        if missing:
+        if any(fastflag.read(d) != flags for d in fastflag.version_dirs()):
             n, msg = fastflag.write(flags)
             self.log(f"⚙ ใส่ FastFlag ให้เวอร์ชันใหม่อัตโนมัติ ({len(flags)} ตัว) — {msg}")
 
@@ -2307,14 +2534,25 @@ class App(ctk.CTk):
             e = self.eng
             cur = e.watcher.current
             st = self.net.stats("อินเทอร์เน็ต", 60) or {}
-            self.l_mini.configure(text=("● Anti-AFK ทำงาน" if e.running else "○ Anti-AFK หยุด") + f"\nเน็ต {st.get('avg') and int(st['avg']) or '-'} ms · หาย {st.get('loss', 0):.0f}%")
+            self.l_mini.configure(text=f"เน็ต {st.get('avg') and int(st['avg']) or '-'} ms · หาย {st.get('loss', 0):.0f}%")
             if st.get("avg") is not None:
                 self.sess.sample_ping(st["avg"])
+            if e.rejoining:
+                self.dot.configure(text="  ◌  กำลังต่อกลับเกม", text_color=WARN)
+            elif e.running:
+                self.dot.configure(text="  ●  Anti-AFK ทำงาน", text_color=ACC)
+            elif self.click.running:
+                self.dot.configure(text="  ●  ออโต้คลิกทำงาน", text_color=ACC)
+            else:
+                self.dot.configure(text="  ○  พักอยู่", text_color=DIM)
+            # priority ตกกลับเป็นปกติทุกครั้งที่เปิดเกมใหม่ — ตั้งให้ใหม่เรื่อยๆ
+            if self.cfg.get("ff_priority") and int(time.time()) % 15 == 0:
+                threading.Thread(target=fpscap.set_roblox_priority, args=("high",), daemon=True).start()
             if self.overlay.visible:
                 nxt = max(0, int(e.next_at - time.time())) if e.running else 0
                 l1 = (f"● AFK ทำงาน · ถัดไป {nxt // 60:02d}:{nxt % 60:02d}", ACC) if e.running else ("○ AFK หยุด (F8)", DIM)
                 l2 = (f"📶 {int(st['avg'])} ms · หาย {st.get('loss', 0):.0f}%", ACC if st.get("loss", 0) < 5 else BAD) if st.get("avg") is not None else ("📶 กำลังวัด", DIM)
-                l3 = (f"🎮 {self.place_name(cur.get('place'))[:28]} · {fmt_dur(time.time() - self.sess.start)}", "#e8e8f0") if cur.get("in_game") and self.sess.start else ("🎮 ไม่ได้อยู่ในเกม", DIM)
+                l3 = (f"🎮 {self.place_name(cur.get('place'))[:28]} · {fmt_dur(time.time() - self.sess.start)}", TXT) if cur.get("in_game") and self.sess.start else ("🎮 ไม่ได้อยู่ในเกม", DIM)
                 sw = self.swatch
                 l4 = ((f"👥 {sw.players}/{sw.maxp} คน" + (f" · เงียบสุด {sw.quiet}" if sw.quiet is not None else "") + f"  ·  {time.strftime('%H:%M')}",
                        BAD if sw.players >= (sw.maxp or 32) * 0.8 else (WARN if sw.players > self.cfg["hop_over"] else ACC))
