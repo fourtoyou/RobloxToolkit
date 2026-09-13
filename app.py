@@ -1988,8 +1988,7 @@ class App(ctk.CTk):
     def __init__(self, args):
         super().__init__()
         self.title("Roblox Toolkit")
-        self.geometry("1120x780")
-        self.minsize(1000, 640)
+        self.wm_minsize(900, 600)      # ขนาดจริงตั้งทีหลัง ตอนรู้แล้วว่าเนื้อหาต้องการเท่าไหร่ (fit_window)
         self.cfg = config.load()
         if fastflag.migrate(self.cfg):      # ผู้ใช้เคยติ๊กชุดแบบเก่าไว้ → แปลงเป็นระดับ
             config.save(self.cfg)
@@ -2071,6 +2070,7 @@ class App(ctk.CTk):
                       "health": HealthPage(self.container, self), "settings": SettingsPage(self.container, self)}
         self.current = None
         self.show("home" if not self.cfg.get("seen_home") or True else "afk")
+        self.fit_window()
 
         if self.cfg.get("multi_instance"):
             fpscap.multi_instance(True)
@@ -2098,6 +2098,25 @@ class App(ctk.CTk):
             self.after(300, self.to_tray)
         self.pump()
         self.tick()
+
+    def fit_window(self):
+        """ตั้งขนาดหน้าต่างให้พอดีกับหน้าที่ใหญ่ที่สุด แล้ววางกลางจอ
+
+        อย่าใส่ตัวเลขตายตัว — สเกล DPI ของ customtkinter ไม่ตรงกันระหว่าง .py กับ .exe
+        แต่ winfo_req* กับ geometry อยู่ในหน่วยเดียวกันเสมอ วัดเอาชัวร์กว่า
+        """
+        try:
+            self.update_idletasks()
+            need_w = self.side.winfo_reqwidth() + max(p.winfo_reqwidth() for p in self.pages.values()) + 12
+            need_h = max(p.winfo_reqheight() for p in self.pages.values()) + 12
+        except Exception as e:
+            config.dbg(f"fit_window: {e}")
+            need_w, need_h = 1120, 780
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        ww = max(900, min(need_w, int(sw * 0.92)))
+        wh = max(600, min(need_h, int(sh * 0.90)))
+        self.wm_geometry(f"{ww}x{wh}+{max(0, (sw - ww) // 2)}+{max(0, (sh - wh) // 2 - 20)}")
+        config.dbg(f"window {ww}x{wh} · เนื้อหาต้องการ {need_w}x{need_h} · จอ {sw}x{sh}")
 
     def ui(self, fn):
         """เรียกจาก thread ไหนก็ได้ — fn จะถูกรันบน main thread"""
