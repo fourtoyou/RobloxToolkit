@@ -15,7 +15,7 @@ from tkinter import filedialog
 import customtkinter as ctk
 
 from core import analytics, charts, clicker, config, filecheck, health, ipc, launcher, macro, notify, schedule, servers, session, sysmon
-from core import fpscap
+from core import fastflag, fpscap
 from core.antiafk import Engine, reason_text
 from core.history import History, fmt_dur, fmt_reason
 from core.netmon import TARGETS, NetMonitor
@@ -344,6 +344,20 @@ class AfkPage(Page):
             self.log(f"🔇 ปิดเสียง Roblox แล้ว ({n})" if mute else f"🔊 เปิดเสียง Roblox คืนแล้ว ({n})")
         elif not ok:
             self.log("ปิดเสียงไม่ได้ (ต้องมี pycaw — ลง build ใหม่)")
+
+    def reapply_flags(self):
+        """Roblox อัปเดต = โฟลเดอร์เวอร์ชันใหม่ ไม่มี FastFlag ติดไปด้วย — ใส่ให้ใหม่ตอนเปิดโปรแกรม"""
+        time.sleep(4)
+        c = self.cfg
+        if not c.get("ff_auto"):
+            return
+        flags, err = fastflag.build(c.get("ff_presets") or [], c.get("ff_fps", "ไม่ตั้ง"), c.get("ff_custom", ""))
+        if err or not flags:
+            return
+        missing = [d for d in fastflag.version_dirs() if fastflag.read(d) != flags]
+        if missing:
+            n, msg = fastflag.write(flags)
+            self.log(f"⚙ ใส่ FastFlag ให้เวอร์ชันใหม่อัตโนมัติ ({len(flags)} ตัว) — {msg}")
 
     # ---------- ตารางเวลา ----------
     def add_job(self):
@@ -1483,6 +1497,112 @@ class HistoryPage(Page):
 
 
 # =====================================================================
+class FlagPage(Page):
+    """FastFlag — เขียน ClientAppSettings.json ให้ Roblox เอง ไม่ต้องพึ่ง Bloxstrap"""
+
+    def __init__(self, master, app):
+        super().__init__(master, app)
+        c = app.cfg
+        head = ctk.CTkFrame(self, fg_color="transparent")
+        head.pack(fill="x", padx=20, pady=(16, 2))
+        ctk.CTkLabel(head, text="FastFlag", font=FH, text_color=ACC).pack(side="left")
+        ctk.CTkButton(head, text="เช็คใหม่", width=90, font=F, command=self.refresh).pack(side="right")
+        ctk.CTkLabel(self, text="สวิตช์ภายในของ Roblox เอง (ตัวเดียวกับที่ Bloxstrap ตั้งให้) — ไม่ใช่การโกง ไม่โดนแบน แต่ใส่มั่วอาจทำเกมพัง มีปุ่มล้างให้",
+                     font=FS, text_color=DIM, wraplength=780, justify="left").pack(anchor="w", padx=20)
+
+        self.l_state = ctk.CTkLabel(self, text="", font=F, fg_color=CARD, corner_radius=10, height=48, justify="left", anchor="w")
+        self.l_state.pack(fill="x", padx=20, pady=10)
+
+        body = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=14)
+
+        fp = ctk.CTkFrame(body, fg_color=CARD, corner_radius=12)
+        fp.pack(fill="x", padx=6, pady=(0, 8))
+        r = ctk.CTkFrame(fp, fg_color="transparent")
+        r.pack(anchor="w", padx=14, pady=10)
+        ctk.CTkLabel(r, text="🎯 ปลดล็อก FPS:", font=FB).pack(side="left")
+        self.v_fps = ctk.StringVar(value=c["ff_fps"])
+        ctk.CTkOptionMenu(r, values=list(fastflag.FPS_CHOICES), variable=self.v_fps, font=F, width=120).pack(side="left", padx=8)
+        ctk.CTkLabel(r, text="(ค่าเริ่มต้นของ Roblox คือ 60 — ตั้งให้ตรงกับจอจะลื่นสุด)", font=FS, text_color=DIM).pack(side="left")
+
+        pr = ctk.CTkFrame(body, fg_color=CARD, corner_radius=12)
+        pr.pack(fill="x", padx=6, pady=(0, 8))
+        ctk.CTkLabel(pr, text="ชุดสำเร็จรูป (ติ๊กได้หลายอัน)", font=FB).pack(anchor="w", padx=14, pady=(10, 2))
+        self.v_pre = {}
+        for name, flags in fastflag.PRESETS.items():
+            v = ctk.BooleanVar(value=name in (c["ff_presets"] or []))
+            self.v_pre[name] = v
+            ctk.CTkSwitch(pr, text=f"{name}   ({len(flags)} flag)", variable=v, font=F).pack(anchor="w", padx=16, pady=2)
+        ctk.CTkLabel(pr, text="", height=4).pack()
+
+        cu = ctk.CTkFrame(body, fg_color=CARD, corner_radius=12)
+        cu.pack(fill="x", padx=6, pady=(0, 8))
+        ctk.CTkLabel(cu, text='พิมพ์เอง (JSON) — เช่น  {"FFlagชื่อ": "True"}', font=FB).pack(anchor="w", padx=14, pady=(10, 2))
+        self.t_custom = ctk.CTkTextbox(cu, height=90, font=("Consolas", 11))
+        self.t_custom.pack(fill="x", padx=14, pady=(0, 10))
+        self.t_custom.insert("1.0", c["ff_custom"] or "")
+
+        act = ctk.CTkFrame(body, fg_color="transparent")
+        act.pack(fill="x", padx=6, pady=(0, 6))
+        ctk.CTkButton(act, text="✅ ใช้ค่าเหล่านี้", height=38, font=FB, command=self.apply).pack(side="left")
+        ctk.CTkButton(act, text="🗑 ล้าง FastFlag ทั้งหมด", height=38, font=F, fg_color="#5a2a34", hover_color="#7a3a46",
+                      command=self.clear).pack(side="left", padx=8)
+        self.v_auto = ctk.BooleanVar(value=c["ff_auto"])
+        ctk.CTkSwitch(act, text="ใส่ให้ใหม่อัตโนมัติเมื่อ Roblox อัปเดตเวอร์ชัน", variable=self.v_auto, font=FS,
+                      command=lambda: (self.app.cfg.__setitem__("ff_auto", self.v_auto.get()), config.save(self.app.cfg))).pack(side="left", padx=10)
+
+        self.l_now = ctk.CTkLabel(body, text="", font=("Consolas", 11), text_color=DIM, justify="left", anchor="w")
+        self.l_now.pack(fill="x", padx=8, pady=(6, 14))
+
+    def on_show(self):
+        self.refresh()
+
+    def refresh(self):
+        flags, vdir = fastflag.current()
+        dirs = fastflag.version_dirs()
+        if not dirs:
+            self.l_state.configure(text="  ⚠ ไม่เจอ Roblox เวอร์ชันปกติ — เวอร์ชัน Microsoft Store/Xbox ตั้ง FastFlag ไม่ได้ (ไฟล์อยู่ในโฟลเดอร์ที่เขียนไม่ได้)",
+                                   text_color=WARN)
+        elif flags:
+            self.l_state.configure(text=f"  🟢 มี FastFlag ทำงานอยู่ {len(flags)} ตัว  ·  เจอ Roblox {len(dirs)} เวอร์ชัน", text_color=ACC)
+        else:
+            self.l_state.configure(text=f"  ⚪ ยังไม่มี FastFlag เลย  ·  เจอ Roblox {len(dirs)} เวอร์ชัน (ตั้งแล้วจะใส่ให้ทุกเวอร์ชัน)", text_color=DIM)
+        self.l_now.configure(text=("ที่มีผลอยู่ตอนนี้:" + NL + NL.join(f"   {k} = {v}" for k, v in flags.items())) if flags else "")
+
+    def gather(self):
+        names = [n for n, v in self.v_pre.items() if v.get()]
+        return fastflag.build(names, self.v_fps.get(), self.t_custom.get("1.0", "end"))
+
+    def apply(self):
+        flags, err = self.gather()
+        if err:
+            return self.app.log("⚠ " + err)
+        if not flags:
+            return self.app.log("ยังไม่ได้เลือกอะไรเลย — ติ๊กชุดสำเร็จรูปหรือตั้ง FPS ก่อน")
+        n, msg = fastflag.write(flags)
+        c = self.app.cfg
+        c["ff_presets"] = [n2 for n2, v in self.v_pre.items() if v.get()]
+        c["ff_fps"] = self.v_fps.get()
+        c["ff_custom"] = self.t_custom.get("1.0", "end").strip()
+        config.save(c)
+        self.app.log(f"⚙ ตั้ง FastFlag {len(flags)} ตัว — {msg}")
+        notify.toast("FastFlag", f"ตั้ง {len(flags)} ตัวแล้ว — ปิด-เปิด Roblox ใหม่ค่าถึงจะมีผล")
+        self.refresh()
+
+    def clear(self):
+        n = fastflag.clear()
+        for v in self.v_pre.values():
+            v.set(False)
+        self.v_fps.set("ไม่ตั้ง")
+        self.t_custom.delete("1.0", "end")
+        c = self.app.cfg
+        c["ff_presets"], c["ff_fps"], c["ff_custom"] = [], "ไม่ตั้ง", ""
+        config.save(c)
+        self.app.log(f"🗑 ล้าง FastFlag แล้ว ({n} เวอร์ชัน) — ปิด-เปิดเกมใหม่จะกลับเป็นค่าเดิมของ Roblox")
+        self.refresh()
+
+
+# =====================================================================
 class HealthPage(Page):
     def __init__(self, master, app):
         super().__init__(master, app)
@@ -1679,7 +1799,7 @@ class SettingsPage(Page):
 class App(ctk.CTk):
     TIMER_ACTIONS = ("หยุด Anti-AFK", "ปิด Roblox", "ปิด Roblox + Sleep เครื่อง", "ปิดเครื่อง")
     NAV = [("home", "🏠  หน้าแรก"), ("afk", "🎮  Anti-AFK"), ("games", "🚀  เกมโปรด"), ("click", "🖱  ออโต้คลิก"), ("stats", "📊  สถิติ"), ("analytics", "📈  วิเคราะห์"), ("sys", "🖥  เครื่อง"), ("history", "🕘  ประวัติ"), ("net", "📶  เน็ต"),
-           ("file", "🛡  ตรวจไฟล์"), ("health", "🩺  สุขภาพระบบ"), ("settings", "⚙  ตั้งค่า")]
+           ("flag", "⚙  FastFlag"), ("file", "🛡  ตรวจไฟล์"), ("health", "🩺  สุขภาพระบบ"), ("settings", "⚙  ตั้งค่า")]
 
     def __init__(self, args):
         super().__init__()
@@ -1737,7 +1857,7 @@ class App(ctk.CTk):
         self.container.pack(side="left", fill="both", expand=True)
         self.pages = {"home": HomePage(self.container, self), "afk": AfkPage(self.container, self), "games": GamesPage(self.container, self), "stats": StatsPage(self.container, self),
                       "analytics": AnalyticsPage(self.container, self), "click": ClickPage(self.container, self),
-                      "sys": SysPage(self.container, self),
+                      "sys": SysPage(self.container, self), "flag": FlagPage(self.container, self),
                       "history": HistoryPage(self.container, self), "net": NetPage(self.container, self), "file": FilePage(self.container, self),
                       "health": HealthPage(self.container, self), "settings": SettingsPage(self.container, self)}
         self.current = None
@@ -1746,6 +1866,7 @@ class App(ctk.CTk):
         if self.cfg.get("multi_instance"):
             fpscap.multi_instance(True)
         self.sched.start()
+        threading.Thread(target=self.reapply_flags, daemon=True).start()
         self.pages["afk"].refresh_jobs()
         self.setup_tray()
         HK_NAME = {VK_F8: "F8", VK_F9: "F9", VK_F6: "F6", VK_F7: "F7", VK_F4: "F4", VK_F5: "F5"}
