@@ -13,6 +13,7 @@
 | 📊 สถิติ | อ่าน log ทั้งหมด → เวลาเล่นต่อวัน / ต่อเกม / ประวัติหลุดพร้อมสาเหตุ (ชื่อเกมดึงจาก Roblox API) |
 | 📶 เน็ต | ping เร้าเตอร์ / อินเทอร์เน็ต / roblox.com ทุกวิ → บอกว่าหลุดเพราะ Wi-Fi, ISP หรือเซิร์ฟ + ที่ตั้งเซิร์ฟที่เล่นอยู่ |
 | 🛡 ตรวจไฟล์ | เช็ค .exe ก่อนรัน: ลายเซ็น, แพ็คด้วยอะไร, string ของ stealer (webhook/cookie/ROBLOSECURITY), SHA-256 → VirusTotal · สแกนทั้ง Downloads |
+| ⚙ FastFlag | ตั้งสวิตช์ภายในของ Roblox เอง (เขียน `ClientAppSettings.json` ตรงๆ **ไม่ต้องพึ่ง Bloxstrap**) — **ปลดล็อก FPS** 60-240/ไม่จำกัด · ชุดลดกราฟิก · ปิดเงา · ปิดโฆษณา+telemetry · พิมพ์ JSON เองได้ · ปุ่มล้างทั้งหมด · ใส่ให้ใหม่เองเมื่อ Roblox อัปเดตเวอร์ชัน |
 | 🩺 สุขภาพระบบ | เช็ค/ซ่อม Bloxstrap handler ที่ Roblox ชอบแย่งคืน, shortcut เสีย, ล้าง log · เปิดพร้อม Windows · ให้ Bloxstrap เปิด Toolkit ตอนเข้าเกม |
 | 🚀 เกมโปรด | เกมที่เล่นบ่อย + เพิ่มเอง · คนเล่นสด · ปุ่ม เข้าเกม / เซิร์ฟ ping ต่ำสุด / กลับเซิร์ฟล่าสุด |
 | ⚙ ตั้งค่า | แจ้งเตือน Discord webhook, **Session Recap** (การ์ดสรุปหลังเล่นจบ → toast + Discord), **Watchdog** (Roblox ค้าง >30 วิ → เปิดกลับเซิร์ฟเดิม · Roblox แครช/ปิดตัวเองระหว่าง Anti-AFK → เปิดกลับ · เก็บกวาด Roblox ที่ค้างเบื้องหลังไม่มีหน้าต่าง), **Adaptive delay** (โดนเตะ idle ทั้งที่ทำงานอยู่ → กดถี่ขึ้นเอง), **Overlay** มุมจอ (F9), เช็คอัปเดต , **เปิด Roblox หลายหน้าต่าง** (หลายบัญชี), **ส่งออก/นำเข้าค่าตั้ง** |
@@ -70,6 +71,7 @@ core/sysmon.py      เฝ้า CPU/RAM/GPU/อุณหภูมิ + เต�
 core/macro.py       อัด/เล่นมาโคร (low-level hook + SendInput)
 core/schedule.py    ตารางเวลาทำซ้ำทุกวัน
 core/fpscap.py      จำกัด FPS (หยุด-ปลุกเธรด) + ปิดเสียงเกม + เปิดหลายหน้าต่าง
+core/fastflag.py    เขียน FastFlag ให้ Roblox (ClientAppSettings.json)
 core/servers.py     หาเซิร์ฟคนน้อยสุด + เฝ้าจำนวนคน + ย้ายเซิร์ฟ
 core/config.py      ค่าตั้ง, path, status.json
 core/ipc.py         รับคำสั่งจาก Discord bot ผ่านไฟล์ + จับภาพหน้าต่าง (PrintWindow)

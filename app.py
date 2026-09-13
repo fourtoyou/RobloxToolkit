@@ -345,20 +345,6 @@ class AfkPage(Page):
         elif not ok:
             self.log("ปิดเสียงไม่ได้ (ต้องมี pycaw — ลง build ใหม่)")
 
-    def reapply_flags(self):
-        """Roblox อัปเดต = โฟลเดอร์เวอร์ชันใหม่ ไม่มี FastFlag ติดไปด้วย — ใส่ให้ใหม่ตอนเปิดโปรแกรม"""
-        time.sleep(4)
-        c = self.cfg
-        if not c.get("ff_auto"):
-            return
-        flags, err = fastflag.build(c.get("ff_presets") or [], c.get("ff_fps", "ไม่ตั้ง"), c.get("ff_custom", ""))
-        if err or not flags:
-            return
-        missing = [d for d in fastflag.version_dirs() if fastflag.read(d) != flags]
-        if missing:
-            n, msg = fastflag.write(flags)
-            self.log(f"⚙ ใส่ FastFlag ให้เวอร์ชันใหม่อัตโนมัติ ({len(flags)} ตัว) — {msg}")
-
     # ---------- ตารางเวลา ----------
     def add_job(self):
         t = schedule.valid_time(self.e_sctime.get())
@@ -1866,7 +1852,12 @@ class App(ctk.CTk):
         if self.cfg.get("multi_instance"):
             fpscap.multi_instance(True)
         self.sched.start()
-        threading.Thread(target=self.reapply_flags, daemon=True).start()
+        def _safe_reapply():
+            try:
+                self.reapply_flags()
+            except Exception as e:
+                config.dbg(f'reapply_flags: {e}')
+        threading.Thread(target=_safe_reapply, daemon=True).start()
         self.pages["afk"].refresh_jobs()
         self.setup_tray()
         HK_NAME = {VK_F8: "F8", VK_F9: "F9", VK_F6: "F6", VK_F7: "F7", VK_F4: "F4", VK_F5: "F5"}
@@ -2175,6 +2166,20 @@ class App(ctk.CTk):
         self.focus_force()
 
     # ---------- ตารางเวลา ----------
+    def reapply_flags(self):
+        """Roblox อัปเดต = โฟลเดอร์เวอร์ชันใหม่ ไม่มี FastFlag ติดไปด้วย — ใส่ให้ใหม่ตอนเปิดโปรแกรม"""
+        time.sleep(4)
+        c = self.cfg
+        if not c.get("ff_auto"):
+            return
+        flags, err = fastflag.build(c.get("ff_presets") or [], c.get("ff_fps", "ไม่ตั้ง"), c.get("ff_custom", ""))
+        if err or not flags:
+            return
+        missing = [d for d in fastflag.version_dirs() if fastflag.read(d) != flags]
+        if missing:
+            n, msg = fastflag.write(flags)
+            self.log(f"⚙ ใส่ FastFlag ให้เวอร์ชันใหม่อัตโนมัติ ({len(flags)} ตัว) — {msg}")
+
     def run_scheduled(self, job):
         act = job.get("action")
         self.log(f"🔁 ถึงเวลาตามตาราง {job.get('time')} → {act}")
