@@ -2080,6 +2080,8 @@ class App(ctk.CTk):
         self.cfg = config.load()
         if fastflag.migrate(self.cfg):      # ผู้ใช้เคยติ๊กชุดแบบเก่าไว้ → แปลงเป็นระดับ
             config.save(self.cfg)
+        if not self.cfg.get("update_repo"):   # ค่าเก่าเป็นช่องว่าง → ใช้ repo ทางการ
+            self.cfg["update_repo"] = config.DEFAULT_REPO
         self.q = queue.Queue()
         self.log_lines = deque(maxlen=300)   # ให้ Discord bot ดึงไปดูได้ (/afk log)
         self.game_events = []

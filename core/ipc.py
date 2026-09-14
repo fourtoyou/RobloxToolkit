@@ -7,6 +7,7 @@ import ctypes
 import glob
 import json
 import os
+import sys
 import threading
 import time
 from ctypes import wintypes
@@ -145,6 +146,36 @@ class CommandServer(threading.Thread):
         app, eng = self.app, self.app.eng
         c = cmd.get("cmd")
         app.log(f"📡 คำสั่งจาก {cmd.get('_from', 'Discord')}: {c}")
+        if c == "update":
+            # เช็ค/ติดตั้งเวอร์ชันใหม่จาก GitHub — สั่งได้จาก Discord (/update) และส่วนขยาย
+            from . import updater
+            repo = app.cfg.get("update_repo") or config.DEFAULT_REPO
+            try:
+                info = updater.check(repo)
+            except Exception as e:
+                return self.reply(cmd, ok=False, msg=f"เช็คไม่ได้: {e}")
+            base = dict(current=config.VERSION, latest=info["ver"], newer=info["newer"], has_file=bool(info["url"]), sha=bool(info["sha256"]))
+            if not info["newer"]:
+                return self.reply(cmd, msg=f"เป็นเวอร์ชันล่าสุดแล้ว (v{config.VERSION})", **base)
+            if not cmd.get("install"):
+                return self.reply(cmd, msg=f"มีเวอร์ชันใหม่ v{info['ver']} (ตอนนี้ v{config.VERSION})", **base)
+            if not info["url"]:
+                return self.reply(cmd, ok=False, msg="release ยังไม่มีไฟล์ .exe (GitHub Actions อาจกำลัง build อยู่)", **base)
+            if not getattr(sys, "frozen", False):
+                return self.reply(cmd, ok=False, msg="รันจากซอร์สอยู่ — ใช้ git pull แทน", **base)
+
+            def work():
+                try:
+                    updater.download(info["url"], updater.staging_path(), info["size"], info["sha256"])
+                    app.log(f"⬆ โหลด v{info['ver']} เสร็จ ตรวจ SHA256 ผ่าน — ปิดเพื่อติดตั้งแล้วเปิดใหม่")
+                    updater.install_and_restart(updater.staging_path())
+                    app.ui(app.on_close)
+                    time.sleep(1.5)
+                    os._exit(0)
+                except Exception as e:
+                    app.log(f"อัปเดตไม่สำเร็จ: {e}")
+            threading.Thread(target=work, daemon=True).start()
+            return self.reply(cmd, msg=f"กำลังโหลด v{info['ver']} — ตรวจไฟล์เสร็จจะปิดแล้วเปิดใหม่เอง (ราว 1 นาที)", **base)
         if c == "join":
             # เข้าเซิร์ฟที่เลือกจากส่วนขยาย — ถ้าเกมเปิดอยู่ใช้ hop (ปิดแล้วเปิดใหม่เข้าเซิร์ฟนั้น) ไม่งั้นเปิดตรงๆ
             place, job = cmd.get("place"), cmd.get("job")
