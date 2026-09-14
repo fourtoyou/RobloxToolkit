@@ -106,6 +106,11 @@ def install_and_restart(new_exe):
     # ห้ามใช้ timeout.exe — ไม่มีคอนโซลจริงมันพังทันที ใช้ ping หน่วงเวลาแทน · ห้ามใช้บล็อก ( ) เพราะ %N% ในบล็อกไม่ขยาย
     script = "\r\n".join([
         "@echo off",
+        "set _MEIPASS2=",
+        "set _PYI_APPLICATION_HOME_DIR=",
+        "set _PYI_ARCHIVE_FILE=",
+        "set _PYI_PARENT_PROCESS_LEVEL=",
+        "set _PYI_SPLASH_IPC=",
         f'echo [%date% %time%] wait pids {" ".join(map(str, pids))} >> "{log}"',
         "set N=0",
         "set C=0",
@@ -144,7 +149,11 @@ def install_and_restart(new_exe):
     with open(bat, "w", encoding="ascii", errors="replace") as f:
         f.write(script)
     # CREATE_NO_WINDOW อย่างเดียว (cmd ได้คอนโซลซ่อนของตัวเอง อยู่ต่อได้หลังเราปิด) — ห้ามใส่ DETACHED_PROCESS
+    # สำคัญมาก: bootloader ของ PyInstaller ใส่ตัวแปร _MEIPASS2 / _PYI_* ไว้ในโปรเซสเรา ถ้าปล่อยให้ .bat
+    # สืบทอดไปถึง exe ตัวใหม่ มันจะนึกว่าตัวเองเป็นโปรเซสลูกแล้วไปหา python312.dll ในโฟลเดอร์ _MEI เก่าที่ถูกลบ
+    # → "Failed to load Python DLL" (เจอจริง 2 รอบตอนทดสอบ 2.9.5→2.9.6 และ 2.9.7→2.9.8)
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("_MEI", "_PYI"))}
     CREATE_NO_WINDOW = 0x08000000
-    subprocess.Popen(["cmd.exe", "/c", bat], creationflags=CREATE_NO_WINDOW, close_fds=True,
+    subprocess.Popen(["cmd.exe", "/c", bat], creationflags=CREATE_NO_WINDOW, close_fds=True, env=env,
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return bat
