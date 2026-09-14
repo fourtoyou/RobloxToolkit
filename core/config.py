@@ -4,7 +4,7 @@ import os
 import sys
 
 APP_NAME = "RobloxToolkit"
-VERSION = "2.15.0"
+VERSION = "2.16.0"
 DEFAULT_REPO = "fourtoyou/RobloxToolkit"   # GitHub ที่ปล่อย Release (อัปเดตอัตโนมัติอ่านจากที่นี่)
 LOCAL = os.environ.get("LOCALAPPDATA", ".")
 # เก็บข้อมูลไว้นอก AppData\Local เพราะ Python จาก Microsoft Store จำลอง (virtualize) โฟลเดอร์นั้น

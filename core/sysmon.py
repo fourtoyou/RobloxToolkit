@@ -9,6 +9,7 @@ Roblox จะแครชหรือเครื่องหน่วงโด�
 - อุณหภูมิ CPU: อ่านไม่ได้ (โน้ตบุ๊กผู้บริโภคทั่วไปไม่เปิดให้ WMI อ่าน) จึงไม่แสดง
 """
 import os
+import re
 import subprocess
 import threading
 import time
@@ -151,6 +152,8 @@ class SysMonitor(threading.Thread):
         self._net_prev = None            # (t, bytes_sent, bytes_recv) สำหรับคิด Mbps
         self._up_since = None
         self._od_paused = False          # เราเป็นคนหยุด OneDrive ไว้ไหม (จะได้เปิดคืนถูกตัว)
+        self._links = None               # {ชื่อการ์ดเน็ต: up?} — จับจังหวะสาย USB/Wi-Fi หลุด (เกมหลุดวันนี้ 2 ครั้งเพราะแบบนี้)
+        self._link_t = 0
 
     # ---------- อ่านค่า ----------
     def sample(self):
@@ -215,7 +218,27 @@ class SysMonitor(threading.Thread):
         self.emit("sys_alert", {"kind": kind, "title": title, "body": body, "color": level})
 
     # ---------- เน็ตนิ่งตอนเล่น (เน็ตมือถือ/hotspot: อัปโหลดหนัก = ping พุ่ง) ----------
+    def link_tick(self, now):
+        """เฝ้าการ์ดเน็ตขึ้น/ลง ทุก 5 วิ — เวลาเกมหลุดจะได้รู้ว่าเพราะสาย/มือถือหลุด ไม่ใช่เซิร์ฟล่ม"""
+        if now - self._link_t < 5:
+            return
+        self._link_t = now
+        import psutil
+        try:
+            st = psutil.net_if_stats()
+        except Exception:
+            return
+        cur = {n: bool(v.isup) for n, v in st.items() if not re.search(r"(?i)loopback|bluetooth|virtual|vethernet|wsl|npcap|isatap|teredo|\*", n)}   # "Local Area Connection* 9" = Wi-Fi Direct เสมือน
+        if self._links is not None:
+            for n, up in cur.items():
+                was = self._links.get(n)
+                if was is None or was == up:
+                    continue
+                self.emit("link", {"name": n, "up": up})
+        self._links = cur
+
     def net_tick(self, now):
+        self.link_tick(now)
         from .win import roblox_pids
         in_game = bool(roblox_pids())
         up = self.avg("up_mbps", 20)

@@ -584,7 +584,8 @@ class AfkPage(Page):
             self.l_srv.configure(text="🌐 เฝ้าเซิร์ฟ: ปิดอยู่ (เปิดได้ในหน้าตั้งค่า)", text_color=DIM)
         elif sw.players is not None:
             q = f"  ·  เงียบสุดที่หาได้ {sw.quiet} คน" if sw.quiet is not None else ""
-            self.l_srv.configure(text=f"🌐 เซิร์ฟนี้: {sw.players}/{sw.maxp} คน · ping {sw.ping} ms{q}",
+            dcl = self.app.net.dc_label(self.app.eng.watcher.current.get("dc"), sw.ping)
+            self.l_srv.configure(text=f"🌐 เซิร์ฟนี้: {sw.players}/{sw.maxp} คน · ping {sw.ping} ms{q}" + (f"  ·  {dcl.split(' · ', 1)[1]}" if dcl else ""),
                                  text_color=BAD if sw.players >= (sw.maxp or 32) * 0.8 else (WARN if sw.players > mx else ACC))
         elif sw.quiet is not None:
             self.l_srv.configure(text=f"🌐 เซิร์ฟเรา: ดูไม่ได้ (เกมใหญ่ ดูได้ทีละ {sw.sample} เซิร์ฟ)  ·  เงียบสุดที่หาได้ {sw.quiet}/{sw.maxp} คน",
@@ -1404,7 +1405,9 @@ class NetPage(Page):
                                     text_color=WARN if sc["up_mbps"] >= (self.app.cfg.get("upload_alert_mbps") or 3) else DIM)
         if nm.server:
             reg = f"  ·  {nm.server_region}" if nm.server_region else ""
-            self.l_server.configure(text=f"เซิร์ฟที่เล่นอยู่: {nm.server[0]}:{nm.server[1]}{reg}")
+            dc = self.app.eng.watcher.current.get("dc")
+            dcl = nm.dc_label(dc, self.app.swatch.ping)
+            self.l_server.configure(text=f"เซิร์ฟที่เล่นอยู่: {nm.server[0]}:{nm.server[1]}{reg}" + (f"  ·  DC {dc}" if dc is not None else "") + (f"  ·  {dcl}" if dcl else ""))
         else:
             self.l_server.configure(text="ยังไม่ได้อยู่ในเกม")
         lines = [f"{time.strftime('%d/%m %H:%M:%S', time.localtime(t))}  {s}" for t, s in list(nm.events)[:15]]
@@ -2274,8 +2277,10 @@ class App(ctk.CTk):
         self.join_want = None       # {"place","job","at","src"} — เซิร์ฟที่ส่วนขยาย/บอทสั่งให้เข้า รอเทียบกับ log
         self.join_result = None     # {"ok","msg","job","at"} — ผลล่าสุด (เขียนลง status.json ให้ส่วนขยาย/บอทอ่าน)
         self.last_ram_apps = None
+        self.dc_learned = None      # (job, ping) ล่าสุดที่จำ DC ไปแล้ว — กันจำซ้ำทุก 5 วิ
         self.hist = History()
         self.net = NetMonitor()
+        self.net.dc_map = (config.load_cache() or {}).get("dc_map") or {}
         self.net.enabled = True
         self.net.start()
         self.eng = Engine(self.log, self.on_event)
@@ -2593,6 +2598,12 @@ class App(ctk.CTk):
             notify.toast(d["title"], d["body"])
             notify.discord(c["webhook_url"], "⚠ " + d["title"], d["body"], d["color"])
             return
+        if kind == "link":
+            txt = f"การ์ดเน็ต '{d['name']}' {'กลับมาแล้ว' if d['up'] else 'หลุด'}"
+            self.game_events.insert(0, (time.time(), ("🔌 " if d["up"] else "⚠ ") + txt))
+            self.net.events.appendleft((time.time(), txt))
+            self.log(("🔌 " if d["up"] else "⚠ ") + txt)
+            return
         if kind == "click_points":
             self.ui(self.pages["click"].refresh_points)
             return
@@ -2640,6 +2651,10 @@ class App(ctk.CTk):
             self.check_join(d)
         elif kind == "server":
             self.net.set_server(d["ip"], d["port"], c["show_server_region"])
+        elif kind == "dc":
+            self.net.server_dc = d["id"]
+            known = self.net.dc_map.get(str(d["id"]))
+            self.log(f"🏢 datacenter {d['id']}" + (f" — เคยเจอ {known.get('n')} ครั้ง {self.net.dc_label(d['id'])}" if known else " (ใหม่ ยังไม่รู้ ping)"))
         elif kind == "disconnect":
             if d["reason"] != 285:
                 self.sess.disconnects += 1
@@ -2891,6 +2906,16 @@ class App(ctk.CTk):
                 self.last_ram_apps = ([{"name": n, "mb": round(mb), "procs": k} for n, mb, k in sysmon.top_apps(3)]
                                       if (self.sys.cur.get("ram") or 0) >= 80 else None)
             if int(time.time()) % 5 == 0:
+                if self.swatch.ping is not None and cur.get("dc") is not None and cur.get("in_game"):
+                    key = (cur.get("job"), self.swatch.ping)
+                    if key != self.dc_learned:
+                        self.dc_learned = key
+                        self.net.learn_dc(cur["dc"], self.swatch.ping, ip=(cur.get("server") or [None])[0], geo=self.net.server_region)
+                if self.net.dc_dirty:
+                    self.net.dc_dirty = False
+                    cache = config.load_cache() or {}
+                    cache["dc_map"] = self.net.dc_map
+                    config.save_cache(cache)
                 v, lvl = self.net.verdict()
                 config.write_status({
                     "running": e.running, "next_poke": e.next_at, "poke_count": e.poke_count, "rejoining": e.rejoining,
@@ -2899,6 +2924,7 @@ class App(ctk.CTk):
                     "server_players": self.swatch.players, "server_max": self.swatch.maxp, "server_quiet": self.swatch.quiet,
                     "server_seen": self.swatch.seen, "server_sample": self.swatch.sample,
                     "server_ping": self.swatch.ping, "join_result": self.join_result, "join_pending": bool(self.join_want),
+                    "dc": cur.get("dc"), "dc_label": self.net.dc_label(cur.get("dc"), self.swatch.ping),
                     "ram_apps": self.last_ram_apps,
                     "clicking": self.click.running, "clicks": self.click.clicks,
                     "fps_cap": self.cfg["fps_cap"] if self.cfg["fps_cap_on"] else 0, "fps_capping": self.fps.capping,

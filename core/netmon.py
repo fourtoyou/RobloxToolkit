@@ -21,6 +21,9 @@ class NetMonitor(threading.Thread):
         self.server = None
         self.server_region = None
         self.enabled = True
+        self.server_dc = None
+        self.dc_map = {}            # {"377": {"ping": 103, "n": 3, "geo": "Tokyo, JP", "ip": ..., "last": ts}} — app โหลด/เซฟให้ใน cache.json
+        self.dc_dirty = False
         self._resolve()
 
     def _resolve(self):
@@ -87,6 +90,37 @@ class NetMonitor(threading.Thread):
             self.server_region = f"{d.get('city', '?')}, {d.get('country', '?')}"
         except Exception:
             self.server_region = "ไม่ทราบ"
+
+    # ---------- datacenter ของ Roblox ----------
+    # log บอก DatacenterId ตอนเข้าเกม · IP ของ Roblox (128.116.x.x) ถาม GeoIP ได้คำตอบมั่ว (Tokyo/Portland/California สำหรับ IP เดียวกัน)
+    # แต่ "ping" ในรายการเซิร์ฟของ Roblox เชื่อได้ → จำคู่ DC↔ping ไว้ ครั้งต่อไปเจอ DC เดิมก็รู้ทันทีว่าไกลแค่ไหน
+    def dc_label(self, dc, ping=None):
+        info = (self.dc_map or {}).get(str(dc)) if dc is not None else None
+        p = ping if ping is not None else (info or {}).get("ping")
+        if p is None:
+            return None
+        if p <= 70:
+            where = "ใกล้ (น่าจะสิงคโปร์)"
+        elif p <= 150:
+            where = "กลาง (ญี่ปุ่น/อินเดีย)"
+        else:
+            where = "ไกล (ยุโรป/อเมริกา)"
+        return f"~{int(p)} ms · {where}"
+
+    def learn_dc(self, dc, ping, ip=None, geo=None):
+        """จำ ping ของ DC นี้ (เฉลี่ยแบบถ่วงน้ำหนัก) — เรียกตอนรายการเซิร์ฟเจอเซิร์ฟเรา"""
+        if dc is None or ping is None:
+            return
+        m = self.dc_map.setdefault(str(dc), {})
+        old = m.get("ping")
+        m["ping"] = round(ping if old is None else old * 0.7 + ping * 0.3)
+        m["n"] = m.get("n", 0) + 1
+        m["last"] = time.time()
+        if ip:
+            m["ip"] = ip
+        if geo and geo != "ไม่ทราบ":
+            m["geo"] = geo
+        self.dc_dirty = True
 
     def verdict(self):
         """สรุปเป็นภาษาคน"""

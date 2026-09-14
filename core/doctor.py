@@ -159,12 +159,31 @@ def run(app=None):
     if app and running:
         sw = app.swatch
         cur = app.eng.watcher.current
-        if cur.get("in_game") and sw.ping is not None:
-            if sw.ping > 150:
-                out.append(dict(key="srv", level="warn", title=f"เซิร์ฟที่เล่นอยู่ไกล (~{sw.ping} ms)",
-                                detail="ส่วนขยาย Chrome ตั้ง 'ping ≤ 100' แล้วกด 'เข้า' จะได้เซิร์ฟสิงคโปร์ · หรือปุ่ม ย้ายไปเซิร์ฟเงียบ", fix=None))
+        dc = cur.get("dc")
+        ping = sw.ping if sw.ping is not None else ((app.net.dc_map.get(str(dc)) or {}).get("ping") if dc is not None else None)
+        if cur.get("in_game") and ping is not None:
+            src = "" if sw.ping is not None else " (จำจาก DC เดิม)"
+            where = f" · DC {dc}" if dc is not None else ""
+            if ping > 150:
+                out.append(dict(key="srv", level="warn", title=f"เซิร์ฟที่เล่นอยู่ไกล (~{ping} ms{src}){where}",
+                                detail="ส่วนขยาย Chrome ตั้ง 'ping ≤ 100' แล้วกด 'เข้า' จะได้เซิร์ฟสิงคโปร์ (~40 ms) · หรือบอท /nearer", fix=None))
+            elif ping > 80:
+                out.append(dict(key="srv", level="info", title=f"เซิร์ฟที่เล่นอยู่กลางๆ (~{ping} ms{src}){where}",
+                                detail="เล่นได้ แต่ถ้าอยากไวกว่านี้ เซิร์ฟสิงคโปร์ ~40 ms — ส่วนขยาย Chrome ตั้ง 'ping ≤ 60' แล้วกด 'เข้า'", fix=None))
             else:
-                out.append(dict(key="srv", level="ok", title=f"เซิร์ฟที่เล่นอยู่ใกล้ (~{sw.ping} ms)", detail="", fix=None))
+                out.append(dict(key="srv", level="ok", title=f"เซิร์ฟที่เล่นอยู่ใกล้ (~{ping} ms){where}", detail="", fix=None))
+
+    # 6b) วันนี้หลุดจากเกมเพราะเน็ตกี่ครั้ง (reason 277 = AckTimeout/เน็ตหาย · ไม่นับ 285 = ออกเอง)
+    try:
+        from .history import load_archive
+        day0 = time.time() - (time.time() + time.timezone) % 86400
+        drops = sorted(s["end"] for s in load_archive().values() if s.get("reason") in (277, 266) and (s.get("end") or 0) >= day0)
+        if drops:
+            when = ", ".join(time.strftime("%H:%M", time.localtime(t)) for t in drops[-4:])
+            out.append(dict(key="drops", level="warn" if len(drops) >= 2 else "info", title=f"วันนี้เน็ตหลุดกลางเกม {len(drops)} ครั้ง ({when})",
+                            detail="เน็ตมือถือ/สาย USB หายไปชั่วคราว (~20 วิ) แล้ว Toolkit ต่อกลับให้ · ถ้าบ่อย: ขยับมือถือหาสัญญาณ / เปลี่ยนสาย USB / ปิดโหมดประหยัดพลังงาน USB", fix=None))
+    except Exception:
+        pass
 
     # 7) RAM / แบต
     if app:

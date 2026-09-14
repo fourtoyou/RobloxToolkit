@@ -16,6 +16,7 @@ from .win import (SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOW, VK_ESCAPE, VK_I, VK
 RE_JOIN = re.compile(r"! Joining game '([0-9a-f-]+)' place (\d+) at ([\d.]+)")
 RE_SERVER = re.compile(r"serverId: ([\d.]+)\|(\d+)")
 RE_DISC = re.compile(r"Sending disconnect with reason: (\d+)")
+RE_DC = re.compile(r"DatacenterId=(\d+)")      # [DFLog::NetworkClient] Transport selection: ... DatacenterId=377
 RE_LOGTS = re.compile(r"_(\d{8}T\d{6})Z_Player_")
 REASONS = {277: "เน็ตหลุด/เซิร์ฟล่ม", 278: "โดนเตะ idle 20 นาที", 273: "ล็อกอินที่อื่น", 267: "โดนสคริปต์เตะ",
            268: "โดนเตะ", 264: "ล็อกอินซ้ำ", 279: "เข้าเซิร์ฟไม่ได้", 280: "เวอร์ชันไม่ตรง", 285: "ออกเอง/วาร์ป",
@@ -94,6 +95,8 @@ class LogWatcher(threading.Thread):
                 ms = RE_SERVER.search(line)
                 st["server"] = (ms.group(1), int(ms.group(2)))
                 self.current["server"] = st["server"]
+            elif RE_DC.search(line):
+                self.current["dc"] = int(RE_DC.search(line).group(1))
             elif RE_DISC.search(line):
                 st["handled"] = True
                 self.current["in_game"] = False
@@ -115,7 +118,7 @@ class LogWatcher(threading.Thread):
         if m:
             st["job"], st["place"], st["handled"] = m.group(1), m.group(2), False
             self.last_join_at = time.time()
-            self.current.update(place=st["place"], job=st["job"], in_game=True, server=None)
+            self.current.update(place=st["place"], job=st["job"], in_game=True, server=None, dc=None)
             self.on_event(("join", st["place"], st["job"], m.group(3)))
             return
         m = RE_SERVER.search(line)
@@ -123,6 +126,11 @@ class LogWatcher(threading.Thread):
             st["server"] = (m.group(1), int(m.group(2)))
             self.current["server"] = st["server"]
             self.on_event(("server", m.group(1), int(m.group(2))))
+            return
+        m = RE_DC.search(line)
+        if m:
+            self.current["dc"] = int(m.group(1))
+            self.on_event(("dc", int(m.group(1))))
             return
         m = RE_DISC.search(line)
         if m and not st["handled"] and st["place"]:
@@ -328,6 +336,8 @@ class Engine:
             self.emit("join", {"place": ev[1], "job": ev[2]})
         elif kind == "server":
             self.emit("server", {"ip": ev[1], "port": ev[2]})
+        elif kind == "dc":
+            self.emit("dc", {"id": ev[1]})
         elif kind == "disconnect":
             reason, place, job, path = ev[1:]
             self.log(f"{'ออกจากเกม' if reason in IGNORE_REASONS else '⚠ หลุด'}: {reason_text(reason)} (code {reason})")
