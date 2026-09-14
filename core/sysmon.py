@@ -101,6 +101,9 @@ class SysMonitor(threading.Thread):
         self._last_alert = {}
         self._game_was = False
         self.freed_mb = 0
+        self._net_prev = None            # (t, bytes_sent, bytes_recv) สำหรับคิด Mbps
+        self._up_since = None
+        self._od_paused = False          # เราเป็นคนหยุด OneDrive ไว้ไหม (จะได้เปิดคืนถูกตัว)
 
     # ---------- อ่านค่า ----------
     def sample(self):
@@ -124,6 +127,16 @@ class SysMonitor(threading.Thread):
             import shutil
             du = shutil.disk_usage(os.environ.get("SystemDrive", "C:") + "\\")
             d.update(disk_free=du.free / 2 ** 30, disk_total=du.total / 2 ** 30)
+        except Exception:
+            pass
+        try:
+            io = psutil.net_io_counters()
+            now = time.time()
+            if self._net_prev:
+                dt = max(0.001, now - self._net_prev[0])
+                d["up_mbps"] = (io.bytes_sent - self._net_prev[1]) * 8 / dt / 1e6
+                d["down_mbps"] = (io.bytes_recv - self._net_prev[2]) * 8 / dt / 1e6
+            self._net_prev = (now, io.bytes_sent, io.bytes_recv)
         except Exception:
             pass
         return d
@@ -153,6 +166,34 @@ class SysMonitor(threading.Thread):
             return
         self._last_alert[kind] = time.time()
         self.emit("sys_alert", {"kind": kind, "title": title, "body": body, "color": level})
+
+    # ---------- เน็ตนิ่งตอนเล่น (เน็ตมือถือ/hotspot: อัปโหลดหนัก = ping พุ่ง) ----------
+    def net_tick(self, now):
+        from .win import roblox_pids
+        in_game = bool(roblox_pids())
+        up = self.avg("up_mbps", 20)
+        limit = self.cfg.get("upload_alert_mbps", 3) or 3
+        if in_game and up is not None and up >= limit:
+            self._up_since = self._up_since or now
+            if now - self._up_since >= 15:
+                hogs = ", ".join(net_hogs()) or "ดูไม่ออก"
+                self._alert("upload_hog", f"มีอะไรอัปโหลดอยู่ {up:.1f} Mbps",
+                            f"เน็ตมือถือ/hotspot อัปโหลดหนักแล้ว ping จะพุ่ง เกมกระตุก — ตัวที่ต่อเน็ตเยอะสุดตอนนี้: {hogs}", 0xFFC857, cooldown=600)
+        else:
+            self._up_since = None
+        # หยุด OneDrive ตอนเกมเปิด (opt-in) แล้วเปิดคืนตอนเกมปิด
+        if self.cfg.get("pause_onedrive"):
+            if in_game and not self._od_paused and onedrive_running():
+                if onedrive_pause():
+                    self._od_paused = True
+                    self.log("☁ หยุด OneDrive ชั่วคราวระหว่างเกมเปิด (จะเปิดคืนเมื่อปิดเกม)")
+            elif not in_game and self._od_paused:
+                onedrive_resume()
+                self._od_paused = False
+                self.log("☁ เปิด OneDrive กลับแล้ว")
+        elif self._od_paused:            # ผู้ใช้ปิดสวิตช์กลางคัน → คืนสภาพ
+            onedrive_resume()
+            self._od_paused = False
 
     def game_mode_tick(self):
         """เปิด Roblox = คายโมเดล AI ให้เกมใช้ VRAM เต็มที่ (Ollama โหลดกลับเองตอนบอทต้องใช้)"""
@@ -203,3 +244,64 @@ class SysMonitor(threading.Thread):
         if free is not None and free < 5:
             self._alert("disk_low", f"ดิสก์เหลือน้อย {free:.1f} GB",
                         "เหลือไม่ถึง 5 GB — Roblox อาจโหลดเกมไม่ได้ ลองล้าง log ในหน้าสุขภาพระบบ", 0xFF5D7A, cooldown=7200)
+        self.net_tick(now)
+
+
+# ---------- ตัวช่วยเน็ต ----------
+def net_hogs(n=3):
+    """โปรเซสที่ต่อเน็ตเยอะสุด (ประมาณการตัวต้องสงสัยเวลาอัปโหลดหนัก — Windows ไม่บอก bandwidth ต่อโปรเซส)"""
+    import psutil
+    from collections import Counter
+    c = Counter()
+    try:
+        for con in psutil.net_connections(kind="inet"):
+            if con.status == "ESTABLISHED" and con.pid:
+                c[con.pid] += 1
+    except Exception:
+        return []
+    out = []
+    for pid, cnt in c.most_common(12):
+        try:
+            name = psutil.Process(pid).name()
+        except Exception:
+            continue
+        if name.lower() in ("robloxplayerbeta.exe", "system", "svchost.exe", "robloxtoolkit.exe"):
+            continue
+        out.append(f"{name} ({cnt})")
+        if len(out) >= n:
+            break
+    return out
+
+
+def onedrive_exe():
+    for p in (os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Microsoft OneDrive", "OneDrive.exe"),
+              os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "OneDrive", "OneDrive.exe")):
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def onedrive_running():
+    import psutil
+    return any(p.info["name"] and p.info["name"].lower() == "onedrive.exe" for p in psutil.process_iter(["name"]))
+
+
+def onedrive_pause():
+    """OneDrive ไม่มีคำสั่ง pause จากข้างนอก — วิธีเดียวที่ปลอดภัยคือสั่งปิดแบบสุภาพ (/shutdown) แล้วเปิดคืนทีหลัง"""
+    exe = onedrive_exe()
+    if not exe:
+        return False
+    try:
+        subprocess.Popen([exe, "/shutdown"], creationflags=NO_WINDOW)
+        return True
+    except OSError:
+        return False
+
+
+def onedrive_resume():
+    exe = onedrive_exe()
+    if exe:
+        try:
+            subprocess.Popen([exe, "/background"], creationflags=NO_WINDOW)
+        except OSError:
+            pass

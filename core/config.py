@@ -4,7 +4,7 @@ import os
 import sys
 
 APP_NAME = "RobloxToolkit"
-VERSION = "2.10.0"
+VERSION = "2.11.0"
 DEFAULT_REPO = "fourtoyou/RobloxToolkit"   # GitHub ที่ปล่อย Release (อัปเดตอัตโนมัติอ่านจากที่นี่)
 LOCAL = os.environ.get("LOCALAPPDATA", ".")
 # เก็บข้อมูลไว้นอก AppData\Local เพราะ Python จาก Microsoft Store จำลอง (virtualize) โฟลเดอร์นั้น
@@ -44,7 +44,8 @@ DEFAULTS = {
     "show_server_region": True, "autostart": False, "start_afk_on_launch": False,
     "update_repo": DEFAULT_REPO,
     "auto_update": True, "update_checked": 0,
-    "region_probe": None,   # ผลวัดภูมิภาคครั้งล่าสุด (ไว้เทียบก่อน-หลังลอง VPN/GPN)   # เช็ค release ใหม่เองวันละครั้ง
+    "region_probe": None,
+    "upload_alert_mbps": 3, "pause_onedrive": False, "bufferbloat": None,   # เน็ตนิ่งตอนเล่น (hotspot)   # ผลวัดภูมิภาคครั้งล่าสุด (ไว้เทียบก่อน-หลังลอง VPN/GPN)   # เช็ค release ใหม่เองวันละครั้ง
     "watchdog": True, "hang_seconds": 30, "notify_recap": True,
     "overlay": False, "overlay_corner": "top-right",
     # ออโต้คลิก

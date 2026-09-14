@@ -146,6 +146,14 @@ class CommandServer(threading.Thread):
         app, eng = self.app, self.app.eng
         c = cmd.get("cmd")
         app.log(f"📡 คำสั่งจาก {cmd.get('_from', 'Discord')}: {c}")
+        if c == "netcheck":
+            from . import netmon as _nm
+            r = _nm.bufferbloat_test()
+            app.cfg["bufferbloat"] = r
+            config.save(app.cfg)
+            app.ui(lambda: app.pages["net"].render_bb(r))
+            return self.reply(cmd, **{k: r[k] for k in ("grade", "level", "extra", "up_mbps", "advice")},
+                              idle=r["idle"]["avg"], loaded=r["up"]["avg"], loaded_max=r["up"]["max"], jitter=r["up"]["jitter"])
         if c == "regions":
             from . import netmon as _nm
             res = _nm.probe_regions()

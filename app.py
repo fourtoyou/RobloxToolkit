@@ -1232,8 +1232,8 @@ class NetPage(Page):
         ctk.CTkLabel(rh, text="🌍 เล่นเซิร์ฟนอกลื่นแค่ไหน — ระยะทางเน็ตจากบ้านไปแต่ละภูมิภาค", font=FB).pack(side="left")
         self.bt_probe = ui.ghost(rh, "วัดตอนนี้ (~15 วิ)", self.probe, width=140, height=30)
         self.bt_probe.pack(side="right")
-        ui.note(rg, "วัดเวลาจับมือไป datacenter เมืองเดียวกับที่ Roblox ตั้งเซิร์ฟ (Roblox บล็อก ping ตรง) · ระยะทางลดไม่ได้ด้วยการจูน "
-                    "— ไทย→US ต่ำสุดตามฟิสิกส์ราว 180-220 ms · ที่จูนได้จริงคือ 'แพ็กเก็ตหาย/jitter' (สาย LAN แทน Wi-Fi, ปิดอัปโหลดพื้นหลัง) "
+        ui.note(rg, "ping ไป host ทดสอบในเมืองเดียวกับที่ Roblox ตั้งเซิร์ฟ (เซิร์ฟเกมบล็อก ping ตรง) · ระยะทางลดไม่ได้ด้วยการจูน "
+                    "— ไทย→US ต่ำสุดตามฟิสิกส์ราว 180-220 ms · ที่จูนได้จริงคือ 'แพ็กเก็ตหาย/jitter' "
                     "· ถ้าลอง VPN/GPN ให้กดวัดก่อนและหลัง แล้วดูว่าดีขึ้นจริงไหม", wraplength=760).pack(anchor="w", padx=16)
         self.l_probe = ctk.CTkLabel(rg, text="", font=FS, text_color=DIM, anchor="w")
         self.l_probe.pack(fill="x", padx=16, pady=(4, 0))
@@ -1241,6 +1241,23 @@ class NetPage(Page):
         self.probe_box.pack(fill="x", padx=14, pady=(2, 10))
         self.probe_rows = []
         self.render_probe(app.cfg.get("region_probe"), app.cfg.get("region_probe_at"))
+
+        # ---------- เน็ตนิ่งตอนโหลดหนักไหม ----------
+        bb = ui.card(self)
+        bb.pack(fill="x", padx=20, pady=(8, 0))
+        bh = ui.row(bb)
+        bh.pack(fill="x", padx=14, pady=(10, 2))
+        ctk.CTkLabel(bh, text="🛜 เน็ตนิ่งตอนมีอะไรอัปโหลดไหม (bufferbloat)", font=FB).pack(side="left")
+        self.l_updown = ctk.CTkLabel(bh, text="", font=FS, text_color=DIM)
+        self.l_updown.pack(side="left", padx=12)
+        self.bt_bb = ui.ghost(bh, "ทดสอบ (~15 วิ)", self.bufferbloat, width=120, height=30)
+        self.bt_bb.pack(side="right")
+        self.v_od = ctk.BooleanVar(value=bool(app.cfg.get("pause_onedrive")))
+        ctk.CTkSwitch(bh, text="หยุด OneDrive ตอนเกมเปิด", variable=self.v_od, font=FS,
+                      command=lambda: (app.cfg.__setitem__("pause_onedrive", self.v_od.get()), config.save(app.cfg))).pack(side="right", padx=10)
+        self.l_bb = ctk.CTkLabel(bb, text="", font=F, justify="left", anchor="w", wraplength=760)
+        self.l_bb.pack(fill="x", padx=16, pady=(2, 10))
+        self.render_bb(app.cfg.get("bufferbloat"))
 
         ctk.CTkLabel(self, text="เหตุการณ์ล่าสุด (เน็ตหลุด / หลุดจากเกม)", font=FB).pack(anchor="w", padx=20, pady=(8, 2))
         self.events = ctk.CTkTextbox(self, font=MONO, fg_color=INK, text_color=DIM)
@@ -1259,6 +1276,24 @@ class NetPage(Page):
             config.save(self.app.cfg)
             self.app.ui(lambda: (self.render_probe(res, time.time(), prev), self.bt_probe.configure(state="normal", text="วัดอีกครั้ง")))
         threading.Thread(target=work, daemon=True).start()
+
+    def bufferbloat(self):
+        self.bt_bb.configure(state="disabled", text="กำลังทดสอบ...")
+
+        def work():
+            r = netmon.bufferbloat_test(progress=lambda t: self.app.ui(lambda: self.l_bb.configure(text=t, text_color=DIM)))
+            self.app.cfg["bufferbloat"] = r
+            config.save(self.app.cfg)
+            self.app.ui(lambda: (self.render_bb(r), self.bt_bb.configure(state="normal", text="ทดสอบอีกครั้ง")))
+        threading.Thread(target=work, daemon=True).start()
+
+    def render_bb(self, r):
+        if not r:
+            return self.l_bb.configure(text="ยังไม่เคยทดสอบ — เน็ตมือถือ/hotspot มักมีอาการนี้: พออะไรอัปโหลด ping จะพุ่งทั้งที่ความเร็วยังเหลือ", text_color=DIM)
+        col = LEVEL_COLOR.get(r["level"], DIM)
+        idle, up = r["idle"], r["up"]
+        self.l_bb.configure(text=f"เกรด {r['grade']}  ·  ว่าง {idle['avg']:.0f} ms → ตอนอัปโหลด {up['avg']:.0f} ms (สูงสุด {up['max']:.0f}, jitter {up['jitter']:.0f}) "
+                                 f"ที่ {r['up_mbps']:.0f} Mbps  ·  {time.strftime('%d/%m %H:%M', time.localtime(r['at']))}\n{r['advice']}", text_color=col)
 
     def render_probe(self, res, at=None, prev=None):
         for w in self.probe_box.winfo_children():
@@ -1308,6 +1343,10 @@ class NetPage(Page):
                     else:
                         hgt = 36 * r / mx
                         cv.create_rectangle(x, 40 - hgt, x + max(w, 1), 40, fill=ACC, outline="")
+        sc = self.app.sys.cur
+        if sc.get("up_mbps") is not None:
+            self.l_updown.configure(text=f"ตอนนี้ ↑ {sc['up_mbps']:.1f}  ↓ {sc['down_mbps']:.1f} Mbps",
+                                    text_color=WARN if sc["up_mbps"] >= (self.app.cfg.get("upload_alert_mbps") or 3) else DIM)
         if nm.server:
             reg = f"  ·  {nm.server_region}" if nm.server_region else ""
             self.l_server.configure(text=f"เซิร์ฟที่เล่นอยู่: {nm.server[0]}:{nm.server[1]}{reg}")
@@ -2739,7 +2778,7 @@ class App(ctk.CTk):
                     "server_seen": self.swatch.seen, "server_sample": self.swatch.sample,
                     "clicking": self.click.running, "clicks": self.click.clicks,
                     "fps_cap": self.cfg["fps_cap"] if self.cfg["fps_cap_on"] else 0, "fps_capping": self.fps.capping,
-                    "sys": {k: self.sys.cur.get(k) for k in ("cpu", "ram", "ram_used", "gpu", "gpu_temp", "vram", "gpu_power", "battery", "plugged", "disk_free")},
+                    "sys": {k: self.sys.cur.get(k) for k in ("cpu", "ram", "ram_used", "gpu", "gpu_temp", "vram", "gpu_power", "battery", "plugged", "disk_free", "up_mbps", "down_mbps")},
                     "net": {"avg": st.get("avg"), "loss": st.get("loss"), "verdict": v, "level": lvl},
                     "playtime_today": self.hist.summary(1)["total"] if not self.hist.loading else None,
                     "last_events": [(t, s) for t, s in self.game_events[:5]], "updated": time.time()})

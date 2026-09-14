@@ -163,3 +163,77 @@ def probe_regions(samples=5, gap=0.15, progress=None):
         progress(len(REGIONS), len(REGIONS), "")
     out.sort(key=lambda r: (r["avg"] is None, r["avg"] or 0))
     return out
+
+
+# ---------- เน็ตนิ่งตอนโหลดหนักไหม (bufferbloat) ----------
+# เน็ตมือถือ/hotspot: พอมีอะไรอัปโหลด คิวในเสามือถือจะบวม → ping พุ่งจาก 20 เป็น 150+ แม้ความเร็วยังเหลือ
+# วัด: ping ว่าง 3 วิ → ping ขณะอัปโหลดใส่ speed.cloudflare.com 8 วิ → เทียบ · เกรดตามที่ waveform.com ใช้
+BB_TARGET = "1.1.1.1"
+
+
+def _ping_series(ip, n, gap=0.2):
+    vals = []
+    for _ in range(n):
+        vals.append(ping(ip, 1500))
+        time.sleep(gap)
+    ok = [v for v in vals if v is not None]
+    jit = sum(abs(ok[i] - ok[i - 1]) for i in range(1, len(ok))) / (len(ok) - 1) if len(ok) > 1 else 0
+    return {"avg": sum(ok) / len(ok) if ok else None, "max": max(ok) if ok else None,
+            "loss": 100 * (1 - len(ok) / len(vals)), "jitter": jit}
+
+
+def bufferbloat_grade(extra):
+    if extra is None:
+        return "?", "gray"
+    if extra < 15:
+        return "A", "green"
+    if extra < 40:
+        return "B", "green"
+    if extra < 80:
+        return "C", "orange"
+    if extra < 150:
+        return "D", "orange"
+    return "F", "red"
+
+
+def bufferbloat_test(progress=None, seconds=8):
+    """คืน {idle, up, up_mbps, extra, grade, level, advice}"""
+    import http.client
+    if progress:
+        progress("วัด ping ตอนว่าง...")
+    idle = _ping_series(BB_TARGET, 12)
+    if progress:
+        progress("อัปโหลดหนัก + วัด ping ไปพร้อมกัน...")
+    stop = {"v": False}
+    sent = [0]
+
+    def upload():
+        try:
+            c = http.client.HTTPSConnection("speed.cloudflare.com", timeout=20)
+            body = b"0" * (1 << 20)
+            while not stop["v"]:
+                c.request("POST", "/__up", body=body, headers={"User-Agent": "RobloxToolkit"})
+                c.getresponse().read()
+                sent[0] += len(body)
+        except Exception:
+            pass
+    th = threading.Thread(target=upload, daemon=True)
+    t0 = time.time()
+    th.start()
+    time.sleep(1.2)
+    up = _ping_series(BB_TARGET, int(seconds / 0.25), 0.25)
+    stop["v"] = True
+    el = time.time() - t0
+    mbps = sent[0] * 8 / el / 1e6
+    extra = (up["avg"] - idle["avg"]) if (up["avg"] is not None and idle["avg"] is not None) else None
+    grade, level = bufferbloat_grade(extra)
+    if grade in ("A", "B"):
+        advice = "เน็ตนิ่งดี — อัปโหลดหนักก็ไม่ทำเกมกระตุก"
+    elif grade == "C":
+        advice = "พอเริ่มมีอะไรอัปโหลด ping จะขึ้นให้รู้สึก — ปิด OneDrive/อัปโหลดพื้นหลังตอนเล่นช่วยได้"
+    else:
+        advice = ("อัปโหลดแล้ว ping พุ่งแรง = ทุกครั้งที่มีอะไร sync/สตรีม เกมจะวาร์ป — เปิดสวิตช์ 'หยุด OneDrive ตอนเกมเปิด' "
+                  "· ปิดแบ็กอัปรูปบนมือถือที่แชร์เน็ต · ถ้าใช้ hotspot ลองเสียบสาย USB tethering แทน Wi-Fi")
+    if mbps < 1:
+        advice = "อัปโหลดทดสอบไม่ขึ้น (เน็ตหลุด/บล็อก?) ผลอาจไม่แม่น — " + advice
+    return {"idle": idle, "up": up, "up_mbps": mbps, "extra": extra, "grade": grade, "level": level, "advice": advice, "at": time.time()}
