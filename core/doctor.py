@@ -181,11 +181,25 @@ def run(app=None):
     try:
         from .history import load_archive
         day0 = time.time() - (time.time() + time.timezone) % 86400
-        drops = sorted(s["end"] for s in load_archive().values() if s.get("reason") in (277, 266) and (s.get("end") or 0) >= day0)
-        if drops:
-            when = ", ".join(time.strftime("%H:%M", time.localtime(t)) for t in drops[-4:])
-            out.append(dict(key="drops", level="warn" if len(drops) >= 2 else "info", title=f"วันนี้เน็ตหลุดกลางเกม {len(drops)} ครั้ง ({when})",
-                            detail="เน็ตมือถือ/สาย USB หายไปชั่วคราว (~20 วิ) แล้ว Toolkit ต่อกลับให้ · ถ้าบ่อย: ขยับมือถือหาสัญญาณ / เปลี่ยนสาย USB / ปิดโหมดประหยัดพลังงาน USB", fix=None))
+        rec = [d for d in config.load_drops() if d.get("t", 0) >= day0 and d.get("reason") not in (285,)]
+        if rec:
+            when = " · ".join(f"{time.strftime('%H:%M', time.localtime(d['t']))} {d.get('cause_short', '')}".strip() for d in rec[-4:])
+            kinds = {}
+            for d in rec:
+                kinds[d.get("kind", "?")] = kinds.get(d.get("kind", "?"), 0) + 1
+            top = max(kinds, key=kinds.get)
+            hint = {"link": "สาย USB/Wi-Fi หลุดจากมือถือ — เช็คสาย/ระยะ · ปิดโหมดประหยัดพลังงาน USB บนมือถือ",
+                    "isp": "มือถือหลุดจากเสาสัญญาณชั่วคราว — ขยับมือถือหาสัญญาณดีกว่า / ล็อก 4G ถ้า 5G ไม่นิ่ง",
+                    "loss": "เน็ตสะดุดก่อนหลุด — ลดของที่อัปโหลด/ดาวน์โหลดตอนเล่น",
+                    "server": "เน็ตปกติ แต่เซิร์ฟตัดเอง — ไม่ใช่ความผิดเครื่องเรา"}.get(top, "")
+            out.append(dict(key="drops", level="warn" if len(rec) >= 2 else "info", title=f"วันนี้หลุดกลางเกม {len(rec)} ครั้ง — {when}",
+                            detail=hint + " · Toolkit ต่อกลับให้อัตโนมัติ", fix=None))
+        else:
+            drops = sorted(s["end"] for s in load_archive().values() if s.get("reason") in (277, 266) and (s.get("end") or 0) >= day0)
+            if drops:
+                when = ", ".join(time.strftime("%H:%M", time.localtime(t)) for t in drops[-4:])
+                out.append(dict(key="drops", level="warn" if len(drops) >= 2 else "info", title=f"วันนี้เน็ตหลุดกลางเกม {len(drops)} ครั้ง ({when})",
+                                detail="เน็ตมือถือ/สาย USB หายไปชั่วคราว (~20 วิ) แล้ว Toolkit ต่อกลับให้ · ถ้าบ่อย: ขยับมือถือหาสัญญาณ / เปลี่ยนสาย USB", fix=None))
     except Exception:
         pass
 

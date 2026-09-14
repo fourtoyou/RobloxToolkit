@@ -972,6 +972,9 @@ class SysPage(Page):
                       command=self.free_now).pack(anchor="w", padx=14, pady=(4, 2))
         self.v_alerts = ctk.BooleanVar(value=app.cfg["sys_alerts"])
         ctk.CTkSwitch(right, text="เตือนเมื่อร้อน/แรมตึง", variable=self.v_alerts, font=FS, command=app.sync_cfg).pack(anchor="w", padx=14, pady=(10, 4))
+        self.v_trim = ctk.BooleanVar(value=app.cfg.get("auto_trim_ram", False))
+        ctk.CTkSwitch(right, text=f"คืนแรมอัตโนมัติเมื่อแรม ≥ {app.cfg.get('ram_limit', 92)}% ตอนเล่นเกม (ไม่เกินทุก 10 นาที)", variable=self.v_trim,
+                      font=FS, command=app.sync_cfg).pack(anchor="w", padx=14, pady=(0, 4))
         r2 = ctk.CTkFrame(right, fg_color="transparent")
         r2.pack(anchor="w", padx=14)
         ctk.CTkLabel(r2, text="เตือนเมื่อ GPU เกิน", font=FS).pack(side="left")
@@ -2278,6 +2281,7 @@ class App(ctk.CTk):
         self.join_result = None     # {"ok","msg","job","at"} — ผลล่าสุด (เขียนลง status.json ให้ส่วนขยาย/บอทอ่าน)
         self.last_ram_apps = None
         self.dc_learned = None      # (job, ping) ล่าสุดที่จำ DC ไปแล้ว — กันจำซ้ำทุก 5 วิ
+        self.link_events = deque(maxlen=50)   # (t, "การ์ดเน็ต X หลุด") ใช้ตอนวินิจฉัยว่าหลุดเพราะอะไร
         self.hist = History()
         self.net = NetMonitor()
         self.net.dc_map = (config.load_cache() or {}).get("dc_map") or {}
@@ -2450,6 +2454,7 @@ class App(ctk.CTk):
         c["overlay_corner"] = s.v_corner.get()
         y = p["sys"]
         c["sys_alerts"] = y.v_alerts.get()
+        c["auto_trim_ram"] = y.v_trim.get()
         c["game_mode"] = y.v_game.get()
         c["fps_cap_on"], c["fps_unlock_focus"], c["automute"] = y.v_fps.get(), y.v_unlock.get(), y.v_mute.get()
         try:
@@ -2524,6 +2529,7 @@ class App(ctk.CTk):
             y.v_mute.set(c["automute"])
             y.v_game.set(c["game_mode"])
             y.v_alerts.set(c["sys_alerts"])
+            y.v_trim.set(c.get("auto_trim_ram", False))
         except Exception as ex:
             config.dbg(f"refresh_all_pages: {ex}")
 
@@ -2598,8 +2604,14 @@ class App(ctk.CTk):
             notify.toast(d["title"], d["body"])
             notify.discord(c["webhook_url"], "⚠ " + d["title"], d["body"], d["color"])
             return
+        if kind == "ram_trim":
+            msg = f"คืนแรมอัตโนมัติ: {d['procs']} โปรเซส · ว่างเพิ่ม {d['freed']:.0f} MB ({d['before']:.0f}% → {d['after']:.0f}%)"
+            self.game_events.insert(0, (time.time(), "🧹 " + msg))
+            self.log("🧹 " + msg)
+            return
         if kind == "link":
             txt = f"การ์ดเน็ต '{d['name']}' {'กลับมาแล้ว' if d['up'] else 'หลุด'}"
+            self.link_events.appendleft((time.time(), txt))
             self.game_events.insert(0, (time.time(), ("🔌 " if d["up"] else "⚠ ") + txt))
             self.net.events.appendleft((time.time(), txt))
             self.log(("🔌 " if d["up"] else "⚠ ") + txt)
@@ -2656,13 +2668,23 @@ class App(ctk.CTk):
             known = self.net.dc_map.get(str(d["id"]))
             self.log(f"🏢 datacenter {d['id']}" + (f" — เคยเจอ {known.get('n')} ครั้ง {self.net.dc_label(d['id'])}" if known else " (ใหม่ ยังไม่รู้ ping)"))
         elif kind == "disconnect":
+            cause = ""
             if d["reason"] != 285:
                 self.sess.disconnects += 1
-                self.game_events.insert(0, (time.time(), f"หลุดจากเกม: {d['text']} ({self.place_name(d['place'])})"))
+                cause, kind_ = self.net.diagnose_drop()
+                links = [txt for t, txt in self.link_events if t >= time.time() - 120]
+                wifi = self.sys.wifi
+                extra = (" · " + ", ".join(links[:2]) if links else "") + (f" · Wi-Fi '{wifi[0]}' {wifi[1]}%" if wifi and wifi[1] is not None else "")
+                short = {"link": "สาย/Wi-Fi หลุด", "isp": "มือถือหลุดจากเสา", "loss": "เน็ตสะดุด", "server": "ฝั่งเซิร์ฟ", "gray": "?"}.get(kind_, "?")
+                config.add_drop({"t": time.time(), "reason": d["reason"], "text": d["text"], "place": d.get("place"), "place_name": self.place_name(d.get("place")),
+                                 "kind": kind_, "cause": cause + extra, "cause_short": short, "dc": self.eng.watcher.current.get("dc"),
+                                 "wifi": wifi, "links": links[:3]})
+                self.game_events.insert(0, (time.time(), f"หลุดจากเกม: {d['text']} ({self.place_name(d['place'])}) — {short}"))
+                self.log(f"🔎 สาเหตุที่หลุด: {cause}{extra}")
             self.finish_session(d["text"])
             if d["reason"] != 285 and c["notify_disconnect"]:
-                notify.toast("หลุดจากเกม", d["text"] + (" — กำลังต่อใหม่" if c["auto_rejoin"] else ""))
-                notify.discord(c["webhook_url"], "⚠ หลุดจากเกม", f"{d['text']} (code {d['reason']})\nเกม: {self.place_name(d['place'])}\n{'กำลังต่อใหม่อัตโนมัติ...' if c['auto_rejoin'] else ''}", 0xFF5D7A)
+                notify.toast("หลุดจากเกม", d["text"] + f" — {cause}" + (" — กำลังต่อใหม่" if c["auto_rejoin"] else ""))
+                notify.discord(c["webhook_url"], "⚠ หลุดจากเกม", f"{d['text']} (code {d['reason']})\nสาเหตุ: {cause}{extra}\nเกม: {self.place_name(d['place'])}\n{'กำลังต่อใหม่อัตโนมัติ...' if c['auto_rejoin'] else ''}", 0xFF5D7A)
         elif kind == "rejoin":
             self.game_events.insert(0, (time.time(), f"ต่อใหม่สำเร็จ (ครั้งที่ {d['attempt']})"))
             if c["notify_rejoin"]:
@@ -2895,7 +2917,9 @@ class App(ctk.CTk):
             if self.overlay.visible:
                 nxt = max(0, int(e.next_at - time.time())) if e.running else 0
                 l1 = (f"● AFK ทำงาน · ถัดไป {nxt // 60:02d}:{nxt % 60:02d}", ACC) if e.running else ("○ AFK หยุด (F8)", DIM)
-                l2 = (f"📶 {int(st['avg'])} ms · หาย {st.get('loss', 0):.0f}%", ACC if st.get("loss", 0) < 5 else BAD) if st.get("avg") is not None else ("📶 กำลังวัด", DIM)
+                sp = self.swatch.ping if self.swatch.ping is not None else ((self.net.dc_map.get(str(cur.get("dc"))) or {}).get("ping") if cur.get("dc") is not None else None)
+                l2 = (f"📶 {int(st['avg'])} ms · หาย {st.get('loss', 0):.0f}%" + (f" · เซิร์ฟ ~{sp}" if sp is not None and cur.get("in_game") else ""),
+                      ACC if st.get("loss", 0) < 5 else BAD) if st.get("avg") is not None else ("📶 กำลังวัด", DIM)
                 l3 = (f"🎮 {self.place_name(cur.get('place'))[:28]} · {fmt_dur(time.time() - self.sess.start)}", TXT) if cur.get("in_game") and self.sess.start else ("🎮 ไม่ได้อยู่ในเกม", DIM)
                 sw = self.swatch
                 l4 = ((f"👥 {sw.players}/{sw.maxp} คน" + (f" · เงียบสุด {sw.quiet}" if sw.quiet is not None else "") + f"  ·  {time.strftime('%H:%M')}",
@@ -2925,6 +2949,7 @@ class App(ctk.CTk):
                     "server_seen": self.swatch.seen, "server_sample": self.swatch.sample,
                     "server_ping": self.swatch.ping, "join_result": self.join_result, "join_pending": bool(self.join_want),
                     "dc": cur.get("dc"), "dc_label": self.net.dc_label(cur.get("dc"), self.swatch.ping),
+                    "wifi": self.sys.wifi,
                     "ram_apps": self.last_ram_apps,
                     "clicking": self.click.running, "clicks": self.click.clicks,
                     "fps_cap": self.cfg["fps_cap"] if self.cfg["fps_cap_on"] else 0, "fps_capping": self.fps.capping,

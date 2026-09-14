@@ -1,10 +1,11 @@
 """ค่าตั้ง + path กลางของโปรแกรม"""
 import json
 import os
+import time
 import sys
 
 APP_NAME = "RobloxToolkit"
-VERSION = "2.16.1"
+VERSION = "2.17.0"
 DEFAULT_REPO = "fourtoyou/RobloxToolkit"   # GitHub ที่ปล่อย Release (อัปเดตอัตโนมัติอ่านจากที่นี่)
 LOCAL = os.environ.get("LOCALAPPDATA", ".")
 # เก็บข้อมูลไว้นอก AppData\Local เพราะ Python จาก Microsoft Store จำลอง (virtualize) โฟลเดอร์นั้น
@@ -65,7 +66,7 @@ DEFAULTS = {
     "bridge_tokens": [],   # token ของส่วนขยาย Chrome ที่จับคู่แล้ว (core/bridge.py)
     "schedule": [],   # ตารางเวลาทำซ้ำทุกวัน [{"time":"23:00","action":"เริ่ม Anti-AFK","on":True}]
     "click_only_roblox": True, "click_max_min": 0, "click_max_clicks": 0,
-    "sys_alerts": True, "gpu_temp_limit": 85, "ram_limit": 92,
+    "sys_alerts": True, "gpu_temp_limit": 85, "ram_limit": 92, "auto_trim_ram": False,
     "fps_cap_on": False, "fps_cap": 5, "fps_unlock_focus": True,   # จำกัด FPS ตอนไม่ได้โฟกัสเกม
     "automute": False,          # ปิดเสียง Roblox ตอน Anti-AFK ทำงาน
     "multi_instance": False,    # เปิด Roblox ได้หลายหน้าต่าง
@@ -133,6 +134,29 @@ def save_cache(c):
 
 
 DEBUG_LOG = os.path.join(DATA_DIR, "debug.log")
+
+
+DROPS_PATH = os.path.join(DATA_DIR, "drops.json")     # ประวัติหลุดจากเกม + สาเหตุที่วิเคราะห์ได้
+
+
+def load_drops():
+    try:
+        with open(DROPS_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def add_drop(d, keep_days=30):
+    lst = [x for x in load_drops() if x.get("t", 0) >= time.time() - keep_days * 86400]
+    lst.append(d)
+    try:
+        tmp = DROPS_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(lst, f, ensure_ascii=False)
+        os.replace(tmp, DROPS_PATH)
+    except Exception:
+        pass
 
 
 def dbg(msg):

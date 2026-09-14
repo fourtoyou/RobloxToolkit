@@ -154,6 +154,10 @@ class SysMonitor(threading.Thread):
         self._od_paused = False          # เราเป็นคนหยุด OneDrive ไว้ไหม (จะได้เปิดคืนถูกตัว)
         self._links = None               # {ชื่อการ์ดเน็ต: up?} — จับจังหวะสาย USB/Wi-Fi หลุด (เกมหลุดวันนี้ 2 ครั้งเพราะแบบนี้)
         self._link_t = 0
+        self._wifi_t = 0
+        self.wifi = None                 # (ssid, signal%) หรือ None ถ้าไม่ได้ใช้ Wi-Fi — อ่านทุก 30 วิ
+        self._weak_since = None
+        self._trim_t = 0
 
     # ---------- อ่านค่า ----------
     def sample(self):
@@ -237,8 +241,56 @@ class SysMonitor(threading.Thread):
                 self.emit("link", {"name": n, "up": up})
         self._links = cur
 
+    def wifi_tick(self, now):
+        """อ่านสัญญาณ Wi-Fi ทุก 30 วิ (netsh ~0.1 วิ) — ใช้ตอนวิเคราะห์ว่าหลุดเพราะอะไร + เตือนสัญญาณอ่อน"""
+        if now - self._wifi_t < 30:
+            return
+        self._wifi_t = now
+        if self._links is not None and not self._links.get("Wi-Fi", True):
+            self.wifi = None
+            return
+        try:
+            raw = subprocess.run(["netsh", "wlan", "show", "interfaces"], capture_output=True, timeout=5, creationflags=NO_WINDOW).stdout
+            try:
+                out = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                out = raw.decode("cp874", "replace")
+            ssid = re.search(r"^\s*SSID\s*:\s*(.+)$", out, re.M)
+            sig = re.search(r"Signal\s*:\s*(\d+)%", out)
+            self.wifi = (ssid.group(1).strip(), int(sig.group(1)) if sig else None) if ssid else None
+        except Exception:
+            self.wifi = None
+        self.cur["wifi_signal"] = self.wifi[1] if self.wifi else None
+        from .win import roblox_pids
+        sig = self.wifi[1] if self.wifi else None
+        if sig is not None and sig < 50 and roblox_pids():
+            self._weak_since = self._weak_since or now
+            if now - self._weak_since >= 60:
+                self._alert("wifi_weak", f"สัญญาณ Wi-Fi อ่อน {sig}%", f"'{self.wifi[0]}' สัญญาณ {sig}% นานเกิน 1 นาที — เกมจะกระตุก/หลุด ขยับมือถือ/เข้าใกล้เร้าเตอร์ หรือเสียบสาย USB", 0xFFC857)
+        else:
+            self._weak_since = None
+
+    def trim_tick(self, now):
+        """คืนแรมอัตโนมัติ (opt-in): แรมถึงเพดานตอนเล่นเกม → คายหน้าที่ไม่ได้ใช้ของโปรแกรมอื่น ไม่เกินทุก 10 นาที"""
+        if not self.cfg.get("auto_trim_ram"):
+            return
+        ram = self.cur.get("ram")
+        if ram is None or ram < self.cfg.get("ram_limit", 92) or now - self._trim_t < 600:
+            return
+        from .win import roblox_pids
+        if not roblox_pids():
+            return
+        self._trim_t = now
+        try:
+            n, freed, b, a = trim_ram()
+            self.emit("ram_trim", {"procs": n, "freed": freed, "before": b, "after": a})
+        except Exception as e:
+            config.dbg(f"auto trim: {e}")
+
     def net_tick(self, now):
         self.link_tick(now)
+        self.wifi_tick(now)
+        self.trim_tick(now)
         from .win import roblox_pids
         in_game = bool(roblox_pids())
         up = self.avg("up_mbps", 20)

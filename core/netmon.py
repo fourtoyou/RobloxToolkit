@@ -73,6 +73,38 @@ class NetMonitor(threading.Thread):
         return {"avg": sum(ok) / len(ok), "max": max(ok), "min": min(ok), "loss": loss, "n": len(pts),
                 "jitter": (sum(abs(ok[i] - ok[i - 1]) for i in range(1, len(ok))) / max(1, len(ok) - 1))}
 
+    def loss_between(self, name, t0, t1):
+        pts = [r for t, r in self.hist[name] if t0 <= t <= t1]
+        if not pts:
+            return None
+        return 100 * (1 - sum(1 for r in pts if r is not None) / len(pts))
+
+    def diagnose_drop(self, t_end=None, window=30):
+        """หลุดเพราะอะไร — ดู ping ช่วง 30 วิก่อนหลุด (Roblox ตัดหลังไม่ได้รับแพ็กเก็ต ~20 วิ): hop แรก (มือถือ/เร้าเตอร์) เทียบกับ 1.1.1.1
+        คืน (สาเหตุสั้น, ชนิด link/isp/loss/server/gray)"""
+        t_end = t_end or time.time()
+        r = self.loss_between("เร้าเตอร์", t_end - window, t_end)
+        i = self.loss_between("อินเทอร์เน็ต", t_end - window, t_end)
+        if i is None:
+            return "ไม่มีข้อมูลเน็ตช่วงนั้น", "gray"
+        # นับว่าหายติดกันกี่วิจนถึงตอนหลุด
+        run = 0
+        for t, rtt in reversed(self.hist["อินเทอร์เน็ต"]):
+            if t > t_end:
+                continue
+            if rtt is None:
+                run += 1
+            else:
+                break
+        if i >= 50 or run >= 8:
+            dur = f" (~{run} วิ)" if run else ""
+            if r is None or r >= 50:
+                return f"สาย USB/Wi-Fi หลุดจากมือถือหรือเร้าเตอร์{dur} — ถึง hop แรกไม่ได้เลย", "link"
+            return f"มือถือ/เร้าเตอร์ยังตอบ แต่ออกอินเทอร์เน็ตไม่ได้{dur} — สัญญาณมือถือ/ISP หายชั่วคราว", "isp"
+        if i >= 8:
+            return f"แพ็กเก็ตหาย {i:.0f}% ช่วงก่อนหลุด — เน็ตสะดุด", "loss"
+        return "เน็ตปกติตอนหลุด → น่าจะฝั่งเซิร์ฟ (ล่ม/ปิด/ย้ายผู้เล่น)", "server"
+
     def series(self, name, window=120):
         return [(t, r) for t, r in self.hist[name] if t >= time.time() - window]
 
