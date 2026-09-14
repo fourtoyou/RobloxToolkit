@@ -22,7 +22,7 @@ from core import netmon
 from core.netmon import TARGETS, NetMonitor
 from core.overlay import Overlay
 from core.watchdog import Watchdog
-from core.win import VK_F4, VK_F5, VK_F6, VK_F7, VK_F8, VK_F9, SW_MINIMIZE, dpi_aware, hotkey_loop, kill_pid, roblox_pids, roblox_windows, u
+from core.win import VK_F4, VK_F5, VK_F6, VK_F7, VK_F8, VK_F9, SW_MINIMIZE, display_info, dpi_aware, hotkey_loop, kill_pid, roblox_pids, roblox_windows, set_refresh, u
 from core.ipc import grab_window
 
 try:
@@ -1721,6 +1721,12 @@ class FlagPage(Page):
                       "ไม่ยุ่งกับข้อมูลในเกมเลย และโปรแกรมจะคอยตั้งให้ใหม่ทุกครั้งที่เปิดเกม", cmd=self.set_pri)
         self.l_pri = ctk.CTkLabel(pr, text="", font=FS, text_color=DIM, anchor="w")
         self.l_pri.pack(fill="x", padx=(68, 16))
+        hzr = ui.row(pr)
+        hzr.pack(fill="x", padx=16, pady=(10, 0))
+        self.l_hz = ctk.CTkLabel(hzr, text="", font=F, anchor="w", justify="left", wraplength=560)
+        self.l_hz.pack(side="left")
+        self.bt_hz = ui.ghost(hzr, "", self.max_hz, width=130, height=30)
+        self.refresh_hz()
         ui.note(pr, "ℹ ปลดล็อก FPS ทาง FastFlag ใช้ไม่ได้แล้ว (Roblox ปิดตั้งแต่ 29 ก.ย. 2025) — ตั้งในเกมเอง: ESC → Settings → Frame Rate "
                     "เลือกได้ถึง 240 · ถ้าอยาก 'หรี่' FPS ตอนทิ้งฟาร์มไว้ ใช้หน้า 🖥 เครื่อง",
                 wraplength=680).pack(anchor="w", padx=16, pady=(8, 14))
@@ -1771,6 +1777,7 @@ class FlagPage(Page):
     def on_show(self):
         self.refresh()
         self.on_pick()
+        self.refresh_hz()
 
     def on_pick(self):
         """อัปเดตคำอธิบาย/คำเตือนทุกครั้งที่เปลี่ยนตัวเลือก (ยังไม่เขียนไฟล์)"""
@@ -1810,6 +1817,32 @@ class FlagPage(Page):
         name = {"high": "High (สูง)", "above": "Above normal", "normal": "ปกติ"}.get(pri)
         self.l_pri.configure(text=("ตอนนี้ Roblox อยู่ที่ priority: " + name) if name else "ยังไม่ได้เปิดเกม — จะตั้งให้ตอนเปิด")
         self.l_now.configure(text=("ที่มีผลอยู่ตอนนี้:   " + "     ".join(f"{k}={v}" for k, v in flags.items())) if flags else "")
+
+    def refresh_hz(self):
+        info = display_info()
+        self.bt_hz.pack_forget()
+        if not info:
+            return self.l_hz.configure(text="🖥 อ่านค่าจอไม่ได้", text_color=DIM)
+        w, h, hz, rates = info
+        top = max(rates) if rates else hz
+        if top > hz:
+            self.l_hz.configure(text=f"🖥 จอตั้งอยู่ที่ {hz} Hz แต่รองรับถึง {top} Hz — เกมวาดกี่ FPS ก็เห็นแค่ {hz} ภาพ/วิ (นี่คือตัวที่ทำให้ 'ไม่ลื่น' มากกว่า FastFlag)",
+                               text_color=WARN)
+            self.bt_hz.configure(text=f"ใช้ {top} Hz")
+            self.bt_hz.pack(side="right")
+        else:
+            self.l_hz.configure(text=f"🖥 จอ {w}x{h} @ {hz} Hz (สูงสุดที่รองรับแล้ว)", text_color=DIM)
+
+    def max_hz(self):
+        info = display_info()
+        if not info:
+            return
+        top = max(info[3])
+        ok, msg = set_refresh(top)
+        self.app.log(("🖥 " if ok else "⚠ ") + msg + (" — ถ้าจอไม่แสดงผล ให้กด Win+Ctrl+Shift+B หรือรอ Windows คืนค่าเอง" if ok else ""))
+        if ok:
+            notify.toast("รีเฟรชเรตจอ", f"{msg} · ใช้แบตมากขึ้นนิดหน่อยตอนไม่เสียบสาย")
+        self.refresh_hz()
 
     # ---------- ปุ่ม ----------
     def apply(self):

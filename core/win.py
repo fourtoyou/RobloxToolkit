@@ -268,3 +268,54 @@ def default_gateway():
     except Exception:
         pass
     return None
+
+
+# ---------- รีเฟรชเรตจอ ----------
+# เจอจริง: จอโน้ตบุ๊กรองรับ 165 Hz แต่ Windows ตั้งไว้ 60 → เกมวาด 120 FPS ก็เห็นแค่ 60 (ปรับ Frame Rate Cap ในเกมไปก็ไม่ต่าง)
+class _DEVMODE(ctypes.Structure):
+    _fields_ = [("dmDeviceName", wintypes.WCHAR * 32), ("dmSpecVersion", wintypes.WORD), ("dmDriverVersion", wintypes.WORD),
+                ("dmSize", wintypes.WORD), ("dmDriverExtra", wintypes.WORD), ("dmFields", wintypes.DWORD),
+                ("dmPositionX", ctypes.c_long), ("dmPositionY", ctypes.c_long), ("dmDisplayOrientation", wintypes.DWORD),
+                ("dmDisplayFixedOutput", wintypes.DWORD), ("dmColor", ctypes.c_short), ("dmDuplex", ctypes.c_short),
+                ("dmYResolution", ctypes.c_short), ("dmTTOption", ctypes.c_short), ("dmCollate", ctypes.c_short),
+                ("dmFormName", wintypes.WCHAR * 32), ("dmLogPixels", wintypes.WORD), ("dmBitsPerPel", wintypes.DWORD),
+                ("dmPelsWidth", wintypes.DWORD), ("dmPelsHeight", wintypes.DWORD), ("dmDisplayFlags", wintypes.DWORD),
+                ("dmDisplayFrequency", wintypes.DWORD), ("dmICMMethod", wintypes.DWORD), ("dmICMIntent", wintypes.DWORD),
+                ("dmMediaType", wintypes.DWORD), ("dmDitherType", wintypes.DWORD), ("dmReserved1", wintypes.DWORD),
+                ("dmReserved2", wintypes.DWORD), ("dmPanningWidth", wintypes.DWORD), ("dmPanningHeight", wintypes.DWORD)]
+
+
+DM_DISPLAYFREQUENCY = 0x400000
+CDS_UPDATEREGISTRY, CDS_TEST = 0x1, 0x2
+DISP_CHANGE_SUCCESSFUL = 0
+
+
+def display_info():
+    """(กว้าง, สูง, Hz ตอนนี้, [Hz ที่จอหลักรองรับที่ความละเอียดนี้])"""
+    dm = _DEVMODE()
+    dm.dmSize = ctypes.sizeof(_DEVMODE)
+    if not u.EnumDisplaySettingsW(None, -1, ctypes.byref(dm)):       # ENUM_CURRENT_SETTINGS
+        return None
+    w, h, hz = dm.dmPelsWidth, dm.dmPelsHeight, dm.dmDisplayFrequency
+    rates, i = set(), 0
+    while u.EnumDisplaySettingsW(None, i, ctypes.byref(dm)):
+        if dm.dmPelsWidth == w and dm.dmPelsHeight == h:
+            rates.add(int(dm.dmDisplayFrequency))
+        i += 1
+    return w, h, int(hz), sorted(rates)
+
+
+def set_refresh(hz):
+    """เปลี่ยนรีเฟรชเรตจอหลัก (ความละเอียดเดิม) — คืน (สำเร็จไหม, ข้อความ) · ทดสอบก่อนด้วย CDS_TEST"""
+    dm = _DEVMODE()
+    dm.dmSize = ctypes.sizeof(_DEVMODE)
+    if not u.EnumDisplaySettingsW(None, -1, ctypes.byref(dm)):
+        return False, "อ่านค่าจอไม่ได้"
+    dm.dmDisplayFrequency = int(hz)
+    dm.dmFields = DM_DISPLAYFREQUENCY
+    if u.ChangeDisplaySettingsExW(None, ctypes.byref(dm), None, CDS_TEST, None) != DISP_CHANGE_SUCCESSFUL:
+        return False, f"จอไม่รับ {hz} Hz ที่ความละเอียดนี้"
+    r = u.ChangeDisplaySettingsExW(None, ctypes.byref(dm), None, CDS_UPDATEREGISTRY, None)
+    if r != DISP_CHANGE_SUCCESSFUL:
+        return False, f"เปลี่ยนไม่ได้ (รหัส {r})"
+    return True, f"จอเป็น {hz} Hz แล้ว"
