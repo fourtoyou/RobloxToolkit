@@ -14,7 +14,7 @@ from tkinter import filedialog
 
 import customtkinter as ctk
 
-from core import analytics, bridge, charts, clicker, config, filecheck, health, ipc, launcher, macro, notify, schedule, servers, session, sysmon
+from core import analytics, bridge, charts, clicker, config, filecheck, health, ipc, launcher, macro, notify, schedule, servers, session, sysmon, updater
 from core import fastflag, fpscap, ui
 from core.antiafk import Engine, reason_text
 from core.history import History, fmt_dur, fmt_reason
@@ -1924,8 +1924,15 @@ class SettingsPage(Page):
         self.e_repo.insert(0, c["update_repo"])
         self.e_repo.pack(side="left", padx=(12, 6))
         ctk.CTkButton(rr, text="เช็คอัปเดต", width=100, font=F, command=self.check_update).pack(side="left")
-        self.l_upd = ctk.CTkLabel(body, text="", font=F, text_color=DIM)
-        self.l_upd.pack(anchor="w", padx=22, pady=(0, 10))
+        self.bt_install = ctk.CTkButton(rr, text="⬇ ติดตั้งเวอร์ชันใหม่", width=150, font=FB, command=self.install_update)
+        self.upd_info = None
+        ur = ui.row(body)
+        ur.pack(fill="x", padx=22, pady=(0, 10))
+        self.l_upd = ctk.CTkLabel(ur, text="", font=F, text_color=DIM, justify="left", wraplength=600)
+        self.l_upd.pack(side="left")
+        self.v_autoupd = ctk.BooleanVar(value=c.get("auto_update", True))
+        ctk.CTkSwitch(ur, text="เช็คเวอร์ชันใหม่เองวันละครั้ง", variable=self.v_autoupd, font=FS,
+                      command=lambda: (c.__setitem__("auto_update", self.v_autoupd.get()), config.save(c))).pack(side="right")
 
     def on_show(self):
         self.refresh_pair()
@@ -1991,25 +1998,68 @@ class SettingsPage(Page):
         self.app.sync_cfg()
         notify.discord(self.app.cfg["webhook_url"], "ทดสอบจาก Roblox Toolkit", "ถ้าเห็นข้อความนี้ แปลว่าตั้งค่าถูกต้อง ✓")
 
-    def check_update(self):
+    def check_update(self, silent=False):
+        """ดู release ล่าสุดบน GitHub — ถ้าใหม่กว่าโชว์ปุ่มติดตั้ง (silent = เช็คเองตอนเปิดโปรแกรม)"""
         self.app.sync_cfg()
         repo = self.app.cfg["update_repo"].strip()
         if not repo:
-            self.l_upd.configure(text="ยังไม่ได้ตั้ง repo — ถ้าปล่อยโปรแกรมบน GitHub แล้วค่อยใส่")
+            if not silent:
+                self.l_upd.configure(text="ยังไม่ได้ตั้ง repo — ใส่เป็น ชื่อGitHub/RobloxToolkit แล้วกดเช็คอีกครั้ง", text_color=DIM)
             return
+        if not silent:
+            self.l_upd.configure(text="กำลังเช็ค...", text_color=DIM)
 
         def work():
             try:
-                import requests
-                r = requests.get(f"https://api.github.com/repos/{repo}/releases/latest", timeout=8).json()
-                tag = r.get("tag_name", "").lstrip("v")
-                url = r.get("html_url", "")
-                if tag and tag != config.VERSION:
-                    self.app.ui(lambda: (self.l_upd.configure(text=f"มีเวอร์ชันใหม่ {tag} (ตอนนี้ {config.VERSION})", text_color=ACC), webbrowser.open(url)))
-                else:
-                    self.app.ui(lambda: self.l_upd.configure(text=f"เป็นเวอร์ชันล่าสุดแล้ว ({config.VERSION})"))
+                info = updater.check(repo)
             except Exception as e:
-                self.app.ui(lambda: self.l_upd.configure(text=f"เช็คไม่ได้: {e}"))
+                if not silent:
+                    self.app.ui(lambda: self.l_upd.configure(text=f"เช็คไม่ได้: {e}", text_color=WARN))
+                return
+            self.app.cfg["update_checked"] = time.time()
+            config.save(self.app.cfg)
+
+            def show():
+                if info["newer"] and info["url"]:
+                    self.upd_info = info
+                    self.l_upd.configure(text=f"มีเวอร์ชันใหม่ v{info['ver']} (ตอนนี้ v{config.VERSION})"
+                                              + ("  ·  มี SHA256 ให้ตรวจ ✓" if info["sha256"] else "  ·  ⚠ release นี้ไม่มี SHA256"), text_color=ACC)
+                    self.bt_install.pack(side="left", padx=(8, 0))
+                    if silent:
+                        self.app.log(f"⬆ มี Roblox Toolkit เวอร์ชันใหม่ v{info['ver']} — หน้าตั้งค่า → ติดตั้งเวอร์ชันใหม่")
+                        notify.toast("Roblox Toolkit", f"มีเวอร์ชันใหม่ v{info['ver']} — ไปหน้าตั้งค่าเพื่อติดตั้ง")
+                elif info["newer"]:
+                    self.l_upd.configure(text=f"มี v{info['ver']} แต่ release ยังไม่มีไฟล์ .exe (Actions อาจกำลัง build อยู่)", text_color=WARN)
+                elif not silent:
+                    self.l_upd.configure(text=f"เป็นเวอร์ชันล่าสุดแล้ว (v{config.VERSION})", text_color=ACC)
+            self.app.ui(show)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def install_update(self):
+        info = self.upd_info
+        if not info:
+            return
+        if not getattr(sys, "frozen", False):
+            return self.l_upd.configure(text="รันจากซอร์สอยู่ — ใช้ git pull แทน (ตัว .exe ถึงจะอัปเดตเองได้)", text_color=WARN)
+        self.bt_install.configure(state="disabled", text="กำลังโหลด...")
+
+        def prog(p):
+            self.app.ui(lambda: self.bt_install.configure(text=f"กำลังโหลด {p * 100:.0f}%"))
+
+        def work():
+            dest = updater.staging_path()
+            try:
+                updater.download(info["url"], dest, info["size"], info["sha256"], prog)
+                self.app.log(f"⬆ โหลด v{info['ver']} เสร็จ ตรวจ SHA256 ผ่าน — กำลังปิดเพื่อติดตั้งแล้วเปิดใหม่")
+                updater.install_and_restart(dest)
+            except Exception as e:
+                self.app.ui(lambda: (self.l_upd.configure(text=f"ติดตั้งไม่ได้: {e}", text_color=BAD),
+                                     self.bt_install.configure(state="normal", text="⬇ ติดตั้งเวอร์ชันใหม่")))
+                return
+            self.app.ui(self.app.on_close)
+            time.sleep(1.5)
+            os._exit(0)          # เผื่อ on_close ค้าง — .bat กำลังรอเราปิดอยู่
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -2121,6 +2171,8 @@ class App(ctk.CTk):
             except Exception as e:
                 config.dbg(f'reapply_flags: {e}')
         threading.Thread(target=_safe_reapply, daemon=True).start()
+        if self.cfg.get("auto_update", True) and self.cfg.get("update_repo") and time.time() - self.cfg.get("update_checked", 0) > 86400:
+            self.after(8000, lambda: self.pages["settings"].check_update(silent=True))
         self.pages["afk"].refresh_jobs()
         self.setup_tray()
         HK_NAME = {VK_F8: "F8", VK_F9: "F9", VK_F6: "F6", VK_F7: "F7", VK_F4: "F4", VK_F5: "F5"}

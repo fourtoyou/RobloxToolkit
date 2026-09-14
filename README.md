@@ -13,10 +13,14 @@
 | 📊 สถิติ | อ่าน log ทั้งหมด → เวลาเล่นต่อวัน / ต่อเกม / ประวัติหลุดพร้อมสาเหตุ (ชื่อเกมดึงจาก Roblox API) |
 | 📶 เน็ต | ping เร้าเตอร์ / อินเทอร์เน็ต / roblox.com ทุกวิ → บอกว่าหลุดเพราะ Wi-Fi, ISP หรือเซิร์ฟ + ที่ตั้งเซิร์ฟที่เล่นอยู่ |
 | 🛡 ตรวจไฟล์ | เช็ค .exe ก่อนรัน: ลายเซ็น, แพ็คด้วยอะไร, string ของ stealer (webhook/cookie/ROBLOSECURITY), SHA-256 → VirusTotal · สแกนทั้ง Downloads |
-| ⚙ FastFlag | ตั้งสวิตช์ภายในของ Roblox เอง (เขียน `ClientAppSettings.json` ตรงๆ **ไม่ต้องพึ่ง Bloxstrap**) — **ปลดล็อก FPS** 60-240/ไม่จำกัด · ชุดลดกราฟิก · ปิดเงา · ปิดโฆษณา+telemetry · พิมพ์ JSON เองได้ · ปุ่มล้างทั้งหมด · ใส่ให้ใหม่เองเมื่อ Roblox อัปเดตเวอร์ชัน |
-| 🩺 สุขภาพระบบ | เช็ค/ซ่อม Bloxstrap handler ที่ Roblox ชอบแย่งคืน, shortcut เสีย, ล้าง log · เปิดพร้อม Windows · ให้ Bloxstrap เปิด Toolkit ตอนเข้าเกม |
+| ⚡ FastFlag | ตั้งสวิตช์ภายในของ Roblox เอง (เขียน `ClientAppSettings.json` ตรงๆ **ไม่ต้องพึ่ง Bloxstrap**) — ทำตาม **allowlist ของ Roblox (29 ก.ย. 2025)** เท่านั้น: ระดับความแรง 5 ระดับ · ตัวเร่งกราฟิก DX11/Vulkan/OpenGL · สวิตช์เสริม · เตือนทันทีถ้าพิมพ์ flag ที่ Roblox ปิดไปแล้ว (ปลดล็อก FPS/ปิดเงา/telemetry ใช้ไม่ได้แล้ว) · ยก priority ให้ Roblox ได้ CPU ก่อน · ใส่ให้ใหม่เองเมื่อ Roblox อัปเดตเวอร์ชัน |
+| 🩺 สุขภาพระบบ | เช็ค/ซ่อมตัวเปิดเกม (handler ที่ Roblox ชอบแย่งคืน, shortcut เสีย) · ล้าง log · เปิดพร้อม Windows · บอกว่า Roblox ที่รันอยู่เป็นตัวปกติ/Bloxstrap/Microsoft Store |
 | 🚀 เกมโปรด | เกมที่เล่นบ่อย + เพิ่มเอง · คนเล่นสด · ปุ่ม เข้าเกม / เซิร์ฟ ping ต่ำสุด / กลับเซิร์ฟล่าสุด |
 | ⚙ ตั้งค่า | แจ้งเตือน Discord webhook, **Session Recap** (การ์ดสรุปหลังเล่นจบ → toast + Discord), **Watchdog** (Roblox ค้าง >30 วิ → เปิดกลับเซิร์ฟเดิม · Roblox แครช/ปิดตัวเองระหว่าง Anti-AFK → เปิดกลับ · เก็บกวาด Roblox ที่ค้างเบื้องหลังไม่มีหน้าต่าง), **Adaptive delay** (โดนเตะ idle ทั้งที่ทำงานอยู่ → กดถี่ขึ้นเอง), **Overlay** มุมจอ (F9), เช็คอัปเดต , **เปิด Roblox หลายหน้าต่าง** (หลายบัญชี), **ส่งออก/นำเข้าค่าตั้ง** |
+
+## อัปเดตอัตโนมัติ
+- หน้าตั้งค่า → ใส่ repo (`ชื่อGitHub/RobloxToolkit`) → **เช็คอัปเดต** → ถ้ามีใหม่กด **⬇ ติดตั้งเวอร์ชันใหม่** โปรแกรมโหลด ตรวจขนาด + SHA256 แล้วเปิดตัวเองใหม่
+- ปล่อยเวอร์ชัน: แก้ `VERSION` ใน `core/config.py` → commit → `git tag v2.9.0 && git push --tags` → GitHub Actions build .exe และสร้าง Release พร้อม SHA256 ให้เอง (`.github/workflows/release.yml`)
 
 ## ใช้งาน
 - ดับเบิลคลิก `dist\RobloxToolkit.exe` (หรือ `run.bat` ถ้ามี Python)

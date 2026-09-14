@@ -1,0 +1,51 @@
+# push tag v* (เช่น v2.9.0) → build .exe บน Windows runner → สร้าง GitHub Release พร้อมไฟล์ + SHA256
+# โปรแกรม (core/updater.py) จะอ่าน release ล่าสุดนี้เพื่ออัปเดตตัวเอง
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Version must match tag
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path core/config.py -Pattern 'VERSION = "([^"]+)"').Matches[0].Groups[1].Value
+          $tag = "${{ github.ref_name }}".TrimStart("v")
+          if ($v -ne $tag) { Write-Error "core/config.py VERSION=$v แต่ tag=$tag"; exit 1 }
+
+      - name: Build exe
+        run: >
+          pyinstaller --clean --onefile --noconsole --name RobloxToolkit --icon icon.ico
+          --collect-all customtkinter --hidden-import pystray._win32 --collect-all comtypes --hidden-import pycaw
+          app.py
+
+      - name: SHA256 → release notes
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash dist/RobloxToolkit.exe -Algorithm SHA256).Hash.ToLower()
+          $size = (Get-Item dist/RobloxToolkit.exe).Length
+          @("RobloxToolkit ${{ github.ref_name }}", "", "SHA256: $h", "ขนาด: $size bytes", "",
+            "ดาวน์โหลด RobloxToolkit.exe ด้านล่าง หรือให้โปรแกรมอัปเดตเองจากหน้าตั้งค่า") | Out-File -Encoding utf8 notes.md
+          Get-Content notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/RobloxToolkit.exe
+          body_path: notes.md
+          generate_release_notes: true

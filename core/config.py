@@ -4,7 +4,7 @@ import os
 import sys
 
 APP_NAME = "RobloxToolkit"
-VERSION = "2.8.0"
+VERSION = "2.9.0"
 LOCAL = os.environ.get("LOCALAPPDATA", ".")
 # เก็บข้อมูลไว้นอก AppData\Local เพราะ Python จาก Microsoft Store จำลอง (virtualize) โฟลเดอร์นั้น
 # ทำให้ Discord bot (รันด้วย Python) กับ Toolkit (.exe) มองเห็นไฟล์คนละชุด
@@ -42,6 +42,7 @@ DEFAULTS = {
     "webhook_url": "", "notify_disconnect": True, "notify_rejoin": True,
     "show_server_region": True, "autostart": False, "start_afk_on_launch": False,
     "update_repo": "",   # เช่น "nongk/RobloxToolkit" ถ้าปล่อยบน GitHub แล้ว
+    "auto_update": True, "update_checked": 0,   # เช็ค release ใหม่เองวันละครั้ง
     "watchdog": True, "hang_seconds": 30, "notify_recap": True,
     "overlay": False, "overlay_corner": "top-right",
     # ออโต้คลิก
