@@ -1,8 +1,7 @@
 @echo off
 cd /d "%~dp0"
-python -m pip install --quiet customtkinter pystray pillow requests psutil pycaw pyinstaller
-python -m PyInstaller --clean --onefile --noconsole --name RobloxToolkit --icon "%~dp0icon.ico" ^
-  --collect-all customtkinter --hidden-import pystray._win32 --collect-all comtypes --hidden-import pycaw ^
-  --distpath dist --workpath "%TEMP%\rtk_build" --specpath "%TEMP%\rtk_build" app.py
+python -m pip install --quiet -r requirements.txt pyinstaller
+rem spec เดียวกับที่ GitHub Actions ใช้ (.github/workflows/release.yml) — แก้ตัวเลือก build ที่ RobloxToolkit.spec ที่เดียว
+python -m PyInstaller --clean --distpath dist --workpath "%TEMP%\rtk_build" RobloxToolkit.spec
 echo.
 echo Build done: dist\RobloxToolkit.exe

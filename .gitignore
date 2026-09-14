@@ -1,7 +1,6 @@
 # ไฟล์ที่ build ออกมา (ใหญ่ ไม่ต้องเก็บใน git — ปล่อยเป็น Release แทน)
 dist/
 build/
-*.spec
 
 # ของ Python
 __pycache__/

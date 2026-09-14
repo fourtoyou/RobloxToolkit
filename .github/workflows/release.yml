@@ -29,11 +29,8 @@ jobs:
           $tag = "${{ github.ref_name }}".TrimStart("v")
           if ($v -ne $tag) { Write-Error "core/config.py VERSION=$v แต่ tag=$tag"; exit 1 }
 
-      - name: Build exe
-        run: >
-          pyinstaller --clean --onefile --noconsole --name RobloxToolkit --icon icon.ico
-          --collect-all customtkinter --hidden-import pystray._win32 --collect-all comtypes --hidden-import pycaw
-          app.py
+      - name: Build exe (spec เดียวกับ build.bat)
+        run: pyinstaller --clean RobloxToolkit.spec
 
       - name: SHA256 → release notes
         shell: pwsh
