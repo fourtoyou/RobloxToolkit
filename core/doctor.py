@@ -23,8 +23,12 @@ NO_WINDOW = 0x08000000
 def _wifi():
     """(ssid, signal%) หรือ None ถ้าไม่ได้ใช้ Wi-Fi"""
     try:
-        out = subprocess.run(["netsh", "wlan", "show", "interfaces"], capture_output=True, text=True, timeout=5,
-                             creationflags=NO_WINDOW).stdout
+        # netsh พ่น UTF-8 (ชื่อ Wi-Fi ภาษาไทย "S23 Ultra ของ Your") — text=True จะถอดเป็น cp1252 แล้วเพี้ยนเป็น à¸‚à¸­à¸‡
+        raw = subprocess.run(["netsh", "wlan", "show", "interfaces"], capture_output=True, timeout=5, creationflags=NO_WINDOW).stdout
+        try:
+            out = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            out = raw.decode("cp874", "replace")
     except Exception:
         return None
     ssid = re.search(r"^\s*SSID\s*:\s*(.+)$", out, re.M)
