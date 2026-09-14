@@ -4,7 +4,7 @@ import os
 import sys
 
 APP_NAME = "RobloxToolkit"
-VERSION = "2.9.9"
+VERSION = "2.9.10"
 DEFAULT_REPO = "fourtoyou/RobloxToolkit"   # GitHub à¸—à¸µà¹ˆà¸›à¸¥à¹ˆà¸­à¸¢ Release (à¸­à¸±à¸›à¹€à¸”à¸•à¸­à¸±à¸•à¹‚à¸™à¸¡à¸±à¸•à¸´à¸­à¹ˆà¸²à¸™à¸ˆà¸²à¸à¸—à¸µà¹ˆà¸™à¸µà¹ˆ)
 LOCAL = os.environ.get("LOCALAPPDATA", ".")
 # à¹€à¸à¹‡à¸šà¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¹„à¸§à¹‰à¸™à¸­à¸ AppData\Local à¹€à¸žà¸£à¸²à¸° Python à¸ˆà¸²à¸ Microsoft Store à¸ˆà¸³à¸¥à¸­à¸‡ (virtualize) à¹‚à¸Ÿà¸¥à¹€à¸”à¸­à¸£à¹Œà¸™à¸±à¹‰à¸™
