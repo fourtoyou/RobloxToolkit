@@ -105,3 +105,61 @@ class NetMonitor(threading.Thread):
         if i["avg"] and i["avg"] > 120:
             return f"อินเทอร์เน็ตช้า ({i['avg']:.0f} ms)", "orange"
         return f"เน็ตปกติ ({i['avg']:.0f} ms, jitter {i.get('jitter', 0):.0f} ms)", "green"
+
+
+# ---------- ระยะทางเน็ตไปภูมิภาคเซิร์ฟ ----------
+# เซิร์ฟเกม Roblox บล็อก ping และไม่บอกว่าอยู่เมืองไหนก่อนเข้า — เลย ping ไป host ทดสอบความหน่วงของ Vultr
+# ในเมืองเดียวกับที่ Roblox ตั้ง datacenter (สิงคโปร์/โตเกียว/US/ยุโรป ...) ค่าที่ได้ ≈ ระยะทางเน็ตจริงจากบ้านไปเมืองนั้น
+# ทำไมต้อง ICMP ไม่ใช่ TCP: เน็ตมือถือ/บางค่ายมี TCP proxy ตอบจับมือแทนปลายทาง → TCP ไปอเมริกาได้ 20 ms (ปลอม)
+# ส่วน ICMP และ UDP (ที่เกม Roblox ใช้จริง) วิ่งถึงปลายทางจริง
+# ใช้ตัดสินว่า "เล่นเซิร์ฟเมกาจะหน่วงเท่าไหร่" และ "VPN/GPN ที่ลองอยู่ช่วยจริงไหม" (วัดก่อน-หลัง)
+REGIONS = [
+    ("🇸🇬 สิงคโปร์", "sgp-ping.vultr.com"),
+    ("🇯🇵 โตเกียว", "hnd-jp-ping.vultr.com"),
+    ("🇮🇳 มุมไบ", "bom-in-ping.vultr.com"),
+    ("🇦🇺 ซิดนีย์", "syd-au-ping.vultr.com"),
+    ("🇺🇸 US ตะวันตก (LA)", "lax-ca-us-ping.vultr.com"),
+    ("🇺🇸 US ตะวันออก (NJ)", "nj-us-ping.vultr.com"),
+    ("🇩🇪 แฟรงก์เฟิร์ต", "fra-de-ping.vultr.com"),
+    ("🇬🇧 ลอนดอน", "lon-gb-ping.vultr.com"),
+    ("🇧🇷 เซาเปาโล", "sao-br-ping.vultr.com"),
+]
+
+
+def region_verdict(avg):
+    if avg is None:
+        return "ไม่ตอบ", "gray"
+    if avg < 70:
+        return "ลื่น", "green"
+    if avg < 130:
+        return "เล่นได้สบาย", "green"
+    if avg < 200:
+        return "หน่วงพอรู้สึก (เกมยิง/ต่อสู้เสียเปรียบ)", "orange"
+    return "เล่นเกมที่ต้องไวลำบาก", "red"
+
+
+def probe_regions(samples=5, gap=0.15, progress=None):
+    """ping ทุกภูมิภาค — คืน [{name, host, avg, min, jitter, loss, verdict, level}] เรียงจากใกล้ไปไกล (~10-15 วิ)"""
+    out = []
+    for i, (name, host) in enumerate(REGIONS):
+        if progress:
+            progress(i, len(REGIONS), name)
+        try:
+            ip = socket.gethostbyname(host)
+        except OSError:
+            out.append({"name": name, "host": host, "avg": None, "min": None, "jitter": None, "loss": 100, "verdict": "หา IP ไม่ได้", "level": "gray"})
+            continue
+        vals = []
+        for _ in range(samples):
+            vals.append(ping(ip, 1500))
+            time.sleep(gap)
+        ok = [v for v in vals if v is not None]
+        avg = sum(ok) / len(ok) if ok else None
+        jit = (sum(abs(ok[k] - ok[k - 1]) for k in range(1, len(ok))) / (len(ok) - 1)) if len(ok) > 1 else 0
+        verdict, level = region_verdict(avg)
+        out.append({"name": name, "host": host, "avg": avg, "min": min(ok) if ok else None, "jitter": jit,
+                    "loss": 100 * (1 - len(ok) / len(vals)), "verdict": verdict, "level": level})
+    if progress:
+        progress(len(REGIONS), len(REGIONS), "")
+    out.sort(key=lambda r: (r["avg"] is None, r["avg"] or 0))
+    return out

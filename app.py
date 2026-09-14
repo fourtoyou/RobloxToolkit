@@ -18,6 +18,7 @@ from core import analytics, bridge, charts, clicker, config, filecheck, health, 
 from core import fastflag, fpscap, ui
 from core.antiafk import Engine, reason_text
 from core.history import History, fmt_dur, fmt_reason
+from core import netmon
 from core.netmon import TARGETS, NetMonitor
 from core.overlay import Overlay
 from core.watchdog import Watchdog
@@ -1222,9 +1223,66 @@ class NetPage(Page):
             self.rows[name] = (lab, cv)
         self.l_server = ctk.CTkLabel(self, text="", font=F, text_color=DIM)
         self.l_server.pack(anchor="w", padx=20, pady=(8, 0))
+
+        # ---------- ระยะทางถึงภูมิภาคเซิร์ฟ ----------
+        rg = ui.card(self)
+        rg.pack(fill="x", padx=20, pady=(8, 0))
+        rh = ui.row(rg)
+        rh.pack(fill="x", padx=14, pady=(10, 2))
+        ctk.CTkLabel(rh, text="🌍 เล่นเซิร์ฟนอกลื่นแค่ไหน — ระยะทางเน็ตจากบ้านไปแต่ละภูมิภาค", font=FB).pack(side="left")
+        self.bt_probe = ui.ghost(rh, "วัดตอนนี้ (~15 วิ)", self.probe, width=140, height=30)
+        self.bt_probe.pack(side="right")
+        ui.note(rg, "วัดเวลาจับมือไป datacenter เมืองเดียวกับที่ Roblox ตั้งเซิร์ฟ (Roblox บล็อก ping ตรง) · ระยะทางลดไม่ได้ด้วยการจูน "
+                    "— ไทย→US ต่ำสุดตามฟิสิกส์ราว 180-220 ms · ที่จูนได้จริงคือ 'แพ็กเก็ตหาย/jitter' (สาย LAN แทน Wi-Fi, ปิดอัปโหลดพื้นหลัง) "
+                    "· ถ้าลอง VPN/GPN ให้กดวัดก่อนและหลัง แล้วดูว่าดีขึ้นจริงไหม", wraplength=760).pack(anchor="w", padx=16)
+        self.l_probe = ctk.CTkLabel(rg, text="", font=FS, text_color=DIM, anchor="w")
+        self.l_probe.pack(fill="x", padx=16, pady=(4, 0))
+        self.probe_box = ui.row(rg)
+        self.probe_box.pack(fill="x", padx=14, pady=(2, 10))
+        self.probe_rows = []
+        self.render_probe(app.cfg.get("region_probe"), app.cfg.get("region_probe_at"))
+
         ctk.CTkLabel(self, text="เหตุการณ์ล่าสุด (เน็ตหลุด / หลุดจากเกม)", font=FB).pack(anchor="w", padx=20, pady=(8, 2))
         self.events = ctk.CTkTextbox(self, font=MONO, fg_color=INK, text_color=DIM)
         self.events.pack(fill="both", expand=True, padx=20, pady=(0, 12))
+
+    def probe(self):
+        self.bt_probe.configure(state="disabled", text="กำลังวัด...")
+        prev = self.app.cfg.get("region_probe")
+
+        def prog(i, n, name):
+            self.app.ui(lambda: self.l_probe.configure(text=f"กำลังวัด {name} ({i + 1}/{n})" if name else ""))
+
+        def work():
+            res = netmon.probe_regions(progress=prog)
+            self.app.cfg["region_probe"], self.app.cfg["region_probe_at"] = res, time.time()
+            config.save(self.app.cfg)
+            self.app.ui(lambda: (self.render_probe(res, time.time(), prev), self.bt_probe.configure(state="normal", text="วัดอีกครั้ง")))
+        threading.Thread(target=work, daemon=True).start()
+
+    def render_probe(self, res, at=None, prev=None):
+        for w in self.probe_box.winfo_children():
+            w.destroy()
+        if not res:
+            return ctk.CTkLabel(self.probe_box, text="ยังไม่เคยวัด — กดปุ่มด้านขวา", font=FS, text_color=DIM).pack(anchor="w", padx=2)
+        before = {r["name"]: r["avg"] for r in (prev or [])}
+        grid = ui.row(self.probe_box)
+        grid.pack(fill="x")
+        for i, r in enumerate(res):
+            col = LEVEL_COLOR.get(r["level"], DIM)
+            cell = ui.row(grid)
+            cell.grid(row=i // 2, column=i % 2, sticky="w", padx=(2, 18), pady=1)
+            ms = f"{r['avg']:.0f} ms" if r["avg"] is not None else "ไม่ตอบ"
+            delta = ""
+            if r["avg"] is not None and before.get(r["name"]) is not None:
+                d = r["avg"] - before[r["name"]]
+                delta = f"  ({'+' if d >= 0 else ''}{d:.0f} จากครั้งก่อน)"
+            ctk.CTkLabel(cell, text=f"{r['name']:<16}", font=F, width=150, anchor="w").pack(side="left")
+            ctk.CTkLabel(cell, text=ms, font=FB, width=70, anchor="w", text_color=col).pack(side="left")
+            ctk.CTkLabel(cell, text=f"{r['verdict']}{delta}" + (f"  · หาย {r['loss']:.0f}%" if r["loss"] else "") + (f"  · jitter {r['jitter']:.0f}" if r.get("jitter") and r["jitter"] >= 10 else ""),
+                         font=FS, text_color=DIM if r["level"] != "red" else BAD, anchor="w").pack(side="left")
+        if at:
+            self.l_probe.configure(text=f"วัดล่าสุด {time.strftime('%d/%m %H:%M', time.localtime(at))}")
 
     def tick(self):
         nm = self.app.net

@@ -146,6 +146,13 @@ class CommandServer(threading.Thread):
         app, eng = self.app, self.app.eng
         c = cmd.get("cmd")
         app.log(f"📡 คำสั่งจาก {cmd.get('_from', 'Discord')}: {c}")
+        if c == "regions":
+            from . import netmon as _nm
+            res = _nm.probe_regions()
+            app.cfg["region_probe"], app.cfg["region_probe_at"] = res, time.time()
+            config.save(app.cfg)
+            app.ui(lambda: app.pages["net"].render_probe(res, time.time()))
+            return self.reply(cmd, regions=res)
         if c == "update":
             # เช็ค/ติดตั้งเวอร์ชันใหม่จาก GitHub — สั่งได้จาก Discord (/update) และส่วนขยาย
             from . import updater
