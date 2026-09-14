@@ -51,6 +51,53 @@ def top_processes(n=6, by="ram"):
     return rows[:n]
 
 
+def top_apps(n=4):
+    """แรมรวมตามชื่อโปรแกรม — Chrome/Discord แตกเป็นหลายสิบโปรเซส ดูทีละตัวจะหลอกว่ากินน้อย · [(ชื่อ, MB รวม, จำนวนโปรเซส)]"""
+    import psutil
+    agg = {}
+    for p in psutil.process_iter(["name", "memory_info"]):
+        try:
+            name = p.info["name"] or "?"
+            a = agg.setdefault(name, [name, 0.0, 0])
+            a[1] += p.info["memory_info"].rss / 1048576
+            a[2] += 1
+        except Exception:
+            pass
+    rows = sorted(agg.values(), key=lambda r: -r[1])
+    return [tuple(r) for r in rows[:n]]
+
+
+def fmt_apps(apps):
+    return ", ".join(f"{n[:-4] if n.lower().endswith('.exe') else n} {mb / 1024:.1f} GB" + (f" ({c} โปรเซส)" if c > 1 else "") for n, mb, c in apps)
+
+
+def trim_ram(keep=("RobloxPlayerBeta.exe",)):
+    """คืนแรมชั่วคราว: สั่งทุกโปรเซส (ยกเว้นเกม) คาย working set — หน้าที่ไม่ได้ใช้ไปอยู่ standby, Windows ดึงกลับเองเมื่อโปรแกรมนั้นต้องการ
+    ช่วยตอนแรมเกือบเต็มให้เกมไม่ต้องรอสลับหน่วยความจำ · ผลเป็นชั่วคราว (Chrome/Discord จะค่อยๆ กินคืน) · คืน (จำนวนโปรเซส, MB ที่ว่างเพิ่ม, %ก่อน, %หลัง)"""
+    import ctypes
+    import psutil
+    k32, psapi = ctypes.windll.kernel32, ctypes.windll.psapi
+    PROCESS_QUERY_INFORMATION, PROCESS_SET_QUOTA = 0x0400, 0x0100
+    before = psutil.virtual_memory()
+    n = 0
+    me = os.getpid()
+    for p in psutil.process_iter(["pid", "name"]):
+        pid, name = p.info["pid"], p.info["name"] or ""
+        if pid in (0, 4, me) or name in keep:
+            continue
+        h = k32.OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_SET_QUOTA, False, pid)
+        if not h:
+            continue
+        try:
+            if psapi.EmptyWorkingSet(h):
+                n += 1
+        finally:
+            k32.CloseHandle(h)
+    time.sleep(1.0)
+    after = psutil.virtual_memory()
+    return n, max(0.0, (after.available - before.available) / 1048576), before.percent, after.percent
+
+
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 
 
@@ -235,9 +282,9 @@ class SysMonitor(threading.Thread):
         if ram is not None and ram >= self.cfg.get("ram_limit", 92):
             self._ram_since = self._ram_since or now
             if now - self._ram_since >= 120:
-                top = ", ".join(f"{n} {mb / 1024:.1f} GB" for n, mb, _ in top_processes(3))
+                top = fmt_apps(top_apps(3))
                 self._alert("ram_full", f"แรมเกือบเต็ม {ram:.0f}%",
-                            f"ใช้ไป {self.cur['ram_used']:.1f}/{self.cur['ram_total']:.0f} GB · กินเยอะสุด: {top}", 0xFF5D7A)
+                            f"ใช้ไป {self.cur['ram_used']:.1f}/{self.cur['ram_total']:.0f} GB · กินเยอะสุด: {top} · หน้าแรก → 🩺 → ปุ่ม 'คืนแรม'", 0xFF5D7A)
         else:
             self._ram_since = None
         free = self.cur.get("disk_free")

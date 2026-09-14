@@ -170,9 +170,10 @@ def run(app=None):
     if app:
         c = app.sys.cur
         if c.get("ram") is not None and c["ram"] >= 85:
-            from .sysmon import top_processes
-            top = ", ".join(f"{n} {mb / 1024:.1f} GB" for n, mb, _ in top_processes(3))
-            out.append(dict(key="ram", level="warn", title=f"แรมใช้ไป {c['ram']:.0f}%", detail="เกิน 85% CPU จะสะดุดจากการสลับหน่วยความจำ · กินเยอะสุด: " + top, fix=None))
+            from .sysmon import fmt_apps, top_apps
+            out.append(dict(key="ram", level="warn", title=f"แรมใช้ไป {c['ram']:.0f}%",
+                            detail="เกิน 85% CPU จะสะดุดจากการสลับหน่วยความจำ · กินเยอะสุด: " + fmt_apps(top_apps(3))
+                                   + " · ปิดโปรแกรมที่ไม่ใช้ตอนเล่น หรือกด 'คืนแรม' (ชั่วคราว)", fix="ram"))
         if c.get("plugged") is False:
             out.append(dict(key="bat", level="warn", title="ไม่ได้เสียบสายชาร์จ", detail="โน้ตบุ๊กลดความเร็ว CPU/GPU ตอนใช้แบต — เสียบสายตอนเล่น", fix=None))
 

@@ -140,6 +140,13 @@ class HomePage(Page):
         self.l_hint.pack(anchor="w", padx=22, pady=(0, 10))
 
     # ---------- หมอเครื่อง ----------
+    def trim_ram(self):
+        n, freed, b, a = sysmon.trim_ram()
+        msg = f"คืนแรมแล้ว: {n} โปรเซส · ว่างเพิ่ม {freed:.0f} MB ({b:.0f}% → {a:.0f}%)"
+        self.app.log("🧹 " + msg)
+        self.app.game_events.insert(0, (time.time(), msg))
+        notify.toast("คืนแรม", msg + " · ผลชั่วคราว — โปรแกรมอื่นจะค่อยๆ ใช้คืน")
+
     def doctor(self):
         app = self.app
         win = ctk.CTkToplevel(app)
@@ -155,7 +162,8 @@ class HomePage(Page):
                "pri": ("เปิด High priority", lambda: (app.pages["flag"].v_pri.set(True), app.pages["flag"].set_pri())),
                "bb": ("ไปหน้าเน็ต", lambda: app.show("net")),
                "od": ("เปิดหยุด OneDrive", lambda: (app.cfg.__setitem__("pause_onedrive", True), config.save(app.cfg), app.pages["net"].v_od.set(True))),
-               "gpu": ("เปิดหน้าตั้งค่า Windows", lambda: os.startfile("ms-settings:display-advancedgraphics"))}
+               "gpu": ("เปิดหน้าตั้งค่า Windows", lambda: os.startfile("ms-settings:display-advancedgraphics")),
+               "ram": ("คืนแรม (ชั่วคราว)", lambda: threading.Thread(target=self.trim_ram, daemon=True).start())}
 
         def show(items, summary):
             for w in win.winfo_children():
@@ -2263,6 +2271,9 @@ class App(ctk.CTk):
         self.q = queue.Queue()
         self.log_lines = deque(maxlen=300)   # ให้ Discord bot ดึงไปดูได้ (/afk log)
         self.game_events = []
+        self.join_want = None       # {"place","job","at","src"} — เซิร์ฟที่ส่วนขยาย/บอทสั่งให้เข้า รอเทียบกับ log
+        self.join_result = None     # {"ok","msg","job","at"} — ผลล่าสุด (เขียนลง status.json ให้ส่วนขยาย/บอทอ่าน)
+        self.last_ram_apps = None
         self.hist = History()
         self.net = NetMonitor()
         self.net.enabled = True
@@ -2606,6 +2617,8 @@ class App(ctk.CTk):
             return
         if kind == "hop_failed":
             self.game_events.insert(0, (time.time(), "ย้ายเซิร์ฟไม่สำเร็จ"))
+            if self.join_want:
+                self.set_join_result(False, "เข้าเซิร์ฟที่เลือกไม่ได้ (อาจเต็มไปก่อน) — กดหาเซิร์ฟใหม่")
             notify.toast("ย้ายเซิร์ฟไม่สำเร็จ", "เข้าเซิร์ฟที่เลือกไม่ได้ (อาจเต็มไปก่อน)")
             return
         if kind == "zombie":
@@ -2624,6 +2637,7 @@ class App(ctk.CTk):
         if kind == "join":
             self.sess.begin(d["place"])
             threading.Thread(target=self.hist.resolve_names, args=([d["place"]],), daemon=True).start()
+            self.check_join(d)
         elif kind == "server":
             self.net.set_server(d["ip"], d["port"], c["show_server_region"])
         elif kind == "disconnect":
@@ -2647,6 +2661,28 @@ class App(ctk.CTk):
             self.ui(self.refresh_tray)
             if c["automute"]:
                 threading.Thread(target=self.apply_mute, args=(bool(d.get("running")),), daemon=True).start()
+
+    # ---------- ยืนยันว่าเข้าเซิร์ฟที่สั่งจริงไหม (ส่วนขยาย/บอทสั่ง join) ----------
+    def set_join_result(self, ok, msg, job=None):
+        want, self.join_want = self.join_want, None
+        self.join_result = {"ok": ok, "msg": msg, "job": job, "wanted": (want or {}).get("job"), "at": time.time()}
+        self.game_events.insert(0, (time.time(), ("✓ " if ok else "✗ ") + msg))
+        self.log(("✓ " if ok else "⚠ ") + msg)
+        notify.toast("เข้าเซิร์ฟที่เลือกแล้ว" if ok else "เข้าเซิร์ฟที่เลือกไม่ได้", msg)
+
+    def check_join(self, d):
+        want = self.join_want
+        if not want:
+            return
+        job = (d.get("job") or "").lower()
+        if str(d.get("place")) != want["place"]:
+            return          # เข้าเกมอื่น (ผู้ใช้กดเองระหว่างรอ) — ไม่ใช่ผลของคำสั่ง
+        name = self.place_name(want["place"])
+        if not want["job"] or job == want["job"]:
+            self.set_join_result(True, f"เข้าเซิร์ฟที่เลือกแล้ว — {name}", job)
+            self.swatch.last_scan = 0
+        else:
+            self.set_join_result(False, f"เข้า {name} แล้วแต่ไม่ใช่เซิร์ฟที่เลือก (เต็มไปก่อน? Roblox สุ่มให้)", job)
 
     def toggle_afk(self):
         if self.eng.running:
@@ -2837,6 +2873,8 @@ class App(ctk.CTk):
             else:
                 self.dot.configure(text="  ○  พักอยู่", text_color=DIM)
             # priority ตกกลับเป็นปกติทุกครั้งที่เปิดเกมใหม่ — ตั้งให้ใหม่เรื่อยๆ
+            if self.join_want and not e.rejoining and time.time() - self.join_want["at"] > 90:
+                self.set_join_result(False, "ยังไม่เห็นเกมเข้าเซิร์ฟใน 90 วิ — ถ้า Chrome ถาม 'เปิด Roblox?' ให้กดตกลง หรือรีเฟรชหน้าเว็บแล้วกดเข้าใหม่")
             if self.cfg.get("ff_priority") and int(time.time()) % 15 == 0:
                 threading.Thread(target=fpscap.set_roblox_priority, args=("high",), daemon=True).start()
             if self.overlay.visible:
@@ -2849,6 +2887,9 @@ class App(ctk.CTk):
                        BAD if sw.players >= (sw.maxp or 32) * 0.8 else (WARN if sw.players > self.cfg["hop_over"] else ACC))
                       if sw.players is not None else (time.strftime("%H:%M"), DIM))
                 self.overlay.update([l1, l2, l3, l4], ACC if e.running else DIM)
+            if int(time.time()) % 15 == 0:
+                self.last_ram_apps = ([{"name": n, "mb": round(mb), "procs": k} for n, mb, k in sysmon.top_apps(3)]
+                                      if (self.sys.cur.get("ram") or 0) >= 80 else None)
             if int(time.time()) % 5 == 0:
                 v, lvl = self.net.verdict()
                 config.write_status({
@@ -2857,6 +2898,8 @@ class App(ctk.CTk):
                     "server": cur.get("server"), "region": self.net.server_region, "hidden": len(e.hidden),
                     "server_players": self.swatch.players, "server_max": self.swatch.maxp, "server_quiet": self.swatch.quiet,
                     "server_seen": self.swatch.seen, "server_sample": self.swatch.sample,
+                    "server_ping": self.swatch.ping, "join_result": self.join_result, "join_pending": bool(self.join_want),
+                    "ram_apps": self.last_ram_apps,
                     "clicking": self.click.running, "clicks": self.click.clicks,
                     "fps_cap": self.cfg["fps_cap"] if self.cfg["fps_cap_on"] else 0, "fps_capping": self.fps.capping,
                     "sys": {k: self.sys.cur.get(k) for k in ("cpu", "ram", "ram_used", "gpu", "gpu_temp", "vram", "gpu_power", "battery", "plugged", "disk_free", "up_mbps", "down_mbps")},

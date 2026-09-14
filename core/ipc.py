@@ -146,6 +146,18 @@ class CommandServer(threading.Thread):
         app, eng = self.app, self.app.eng
         c = cmd.get("cmd")
         app.log(f"📡 คำสั่งจาก {cmd.get('_from', 'Discord')}: {c}")
+        if c == "ram":
+            from .sysmon import top_apps
+            cur = app.sys.cur
+            return self.reply(cmd, percent=cur.get("ram"), used=cur.get("ram_used"), total=cur.get("ram_total"),
+                              apps=[{"name": n, "mb": round(mb), "procs": k} for n, mb, k in top_apps(6)])
+        if c == "trim_ram":
+            from .sysmon import trim_ram
+            n, freed, b, a = trim_ram()
+            msg = f"คืนแรมแล้ว: {n} โปรเซส · ว่างเพิ่ม {freed:.0f} MB ({b:.0f}% → {a:.0f}%)"
+            app.log("🧹 " + msg)
+            app.game_events.insert(0, (time.time(), msg))
+            return self.reply(cmd, msg=msg, procs=n, freed_mb=round(freed), before=b, after=a)
         if c == "doctor":
             from . import doctor as _doc
             items, summary = _doc.run(app)
@@ -202,6 +214,9 @@ class CommandServer(threading.Thread):
                 return self.reply(cmd, ok=False, msg="ไม่รู้ว่าเกมไหน")
             if eng.rejoining:
                 return self.reply(cmd, ok=False, msg="กำลังต่อเกมอยู่ รอสักครู่")
+            # จำไว้ว่าอยากไปเซิร์ฟไหน — app จะเทียบกับ log ตอนเกมเข้าจริง แล้วบอกผลใน status.json (join_result) + แจ้งเตือน
+            app.join_want = {"place": str(place), "job": (job or "").lower() or None, "at": time.time(), "src": cmd.get("_from", "Discord")}
+            app.join_result = None
             if roblox_pids():
                 eng.rejoining = True
                 threading.Thread(target=eng.hop, args=(place, lambda: job), daemon=True).start()
