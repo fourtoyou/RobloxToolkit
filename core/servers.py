@@ -14,7 +14,7 @@ from . import config
 from .win import idle_seconds
 
 API = "https://games.roblox.com/v1/games"
-PAGES = 3               # 3 หน้า = ~300 เซิร์ฟ · หน้าที่ 4 มักโดน 429
+PAGES = 1               # sortOrder=Asc ให้ Roblox เรียงคนน้อยสุดมาให้เอง → หน้าเดียว (100 เซิร์ฟ) ก็ได้ตัวที่เงียบสุดจริง
 _snap = {}              # place -> {"at": ts, "data": [...]}
 _lock = threading.Lock()
 _cooldown_until = 0     # โดน 429 แล้วหยุดยิงชั่วคราว
@@ -36,7 +36,7 @@ def scan(place, pages=PAGES, timeout=8):
     out, cursor = [], ""
     s = requests.Session()
     for i in range(pages):
-        url = f"{API}/{place}/servers/Public?limit=100&excludeFullGames=false"
+        url = f"{API}/{place}/servers/Public?limit=100&sortOrder=Asc&excludeFullGames=false"
         if cursor:
             url += "&cursor=" + cursor
         try:

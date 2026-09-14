@@ -12,7 +12,7 @@ import time
 from ctypes import wintypes
 
 from . import config
-from .win import roblox_windows, u
+from .win import roblox_pids, roblox_windows, u
 
 CMD_DIR = os.path.join(config.DATA_DIR, "cmd")
 RES_DIR = os.path.join(config.DATA_DIR, "res")
@@ -133,15 +133,37 @@ class CommandServer(threading.Thread):
     def reply(self, cmd, **data):
         data.setdefault("ok", True)
         data["at"] = time.time()
+        if cmd.get("_direct"):          # เรียกตรงจาก bridge (HTTP) — คืนค่ากลับไปเลย ไม่ต้องเขียนไฟล์
+            return data
         tmp = os.path.join(RES_DIR, f"{cmd['id']}.tmp")
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
         os.replace(tmp, os.path.join(RES_DIR, f"{cmd['id']}.json"))
+        return data
 
     def handle(self, cmd):
         app, eng = self.app, self.app.eng
         c = cmd.get("cmd")
-        app.log(f"📡 คำสั่งจาก Discord: {c}")
+        app.log(f"📡 คำสั่งจาก {cmd.get('_from', 'Discord')}: {c}")
+        if c == "join":
+            # เข้าเซิร์ฟที่เลือกจากส่วนขยาย — ถ้าเกมเปิดอยู่ใช้ hop (ปิดแล้วเปิดใหม่เข้าเซิร์ฟนั้น) ไม่งั้นเปิดตรงๆ
+            place, job = cmd.get("place"), cmd.get("job")
+            if not place:
+                return self.reply(cmd, ok=False, msg="ไม่รู้ว่าเกมไหน")
+            if eng.rejoining:
+                return self.reply(cmd, ok=False, msg="กำลังต่อเกมอยู่ รอสักครู่")
+            if roblox_pids():
+                eng.rejoining = True
+                threading.Thread(target=eng.hop, args=(place, lambda: job), daemon=True).start()
+                how = "ปิดเกมแล้วเปิดใหม่เข้าเซิร์ฟที่เลือก"
+            else:
+                from . import launcher
+                launcher.launch(place, job)
+                how = "เปิดเกมเข้าเซิร์ฟที่เลือก"
+            if cmd.get("afk") and not eng.running:
+                app.ui(lambda: (eng.start(app.cfg["immediate"]), app.log("เริ่ม Anti-AFK (จากส่วนขยาย)")))
+                how += " + เริ่ม Anti-AFK"
+            return self.reply(cmd, msg=how)
         if c == "screenshot":
             wins = roblox_windows(True) + [h for h in eng.hidden if u.IsWindow(h)]
             if not wins:

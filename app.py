@@ -14,7 +14,7 @@ from tkinter import filedialog
 
 import customtkinter as ctk
 
-from core import analytics, charts, clicker, config, filecheck, health, ipc, launcher, macro, notify, schedule, servers, session, sysmon
+from core import analytics, bridge, charts, clicker, config, filecheck, health, ipc, launcher, macro, notify, schedule, servers, session, sysmon
 from core import fastflag, fpscap, ui
 from core.antiafk import Engine, reason_text
 from core.history import History, fmt_dur, fmt_reason
@@ -1885,6 +1885,20 @@ class SettingsPage(Page):
         self.v_corner = ctk.StringVar(value=c["overlay_corner"])
         ctk.CTkOptionMenu(rowc, values=["top-right", "top-left", "bottom-right", "bottom-left"], variable=self.v_corner, command=lambda _: app.sync_cfg(), font=F, width=140).pack(side="left")
         ctk.CTkLabel(card, text="", height=6).pack()
+        ext = ctk.CTkFrame(body, fg_color=CARD, corner_radius=14)
+        ext.pack(fill="x", padx=6, pady=(12, 0))
+        ui.title(ext, "🧩 ส่วนขยาย Chrome (Roblox Server Finder)")
+        ui.note(ext, "จับคู่ครั้งเดียว: กดไอคอนส่วนขยายใน Chrome → ช่อง \"เชื่อมกับ Toolkit\" → พิมพ์รหัสนี้  ·  รหัสใช้ได้ครั้งเดียว หมดอายุใน 10 นาที",
+                wraplength=700).pack(anchor="w", padx=16)
+        er = ui.row(ext)
+        er.pack(fill="x", padx=14, pady=(6, 12))
+        self.l_code = ctk.CTkLabel(er, text="", font=("Consolas", 26, "bold"), text_color=ACC)
+        self.l_code.pack(side="left", padx=(2, 14))
+        ui.ghost(er, "สร้างรหัสใหม่", self.new_code, width=110).pack(side="left")
+        ui.danger_btn(er, "ยกเลิกการจับคู่ทั้งหมด", self.unpair, width=170).pack(side="left", padx=8)
+        self.l_pair = ctk.CTkLabel(er, text="", font=FS, text_color=DIM)
+        self.l_pair.pack(side="left", padx=6)
+
         info = ctk.CTkFrame(body, fg_color=CARD, corner_radius=14)
         info.pack(fill="x", padx=6, pady=12)
         ctk.CTkLabel(info, text=f"Roblox Toolkit v{config.VERSION}", font=FB).pack(anchor="w", padx=14, pady=(12, 0))
@@ -1912,6 +1926,30 @@ class SettingsPage(Page):
         ctk.CTkButton(rr, text="เช็คอัปเดต", width=100, font=F, command=self.check_update).pack(side="left")
         self.l_upd = ctk.CTkLabel(body, text="", font=F, text_color=DIM)
         self.l_upd.pack(anchor="w", padx=22, pady=(0, 10))
+
+    def on_show(self):
+        self.refresh_pair()
+
+    def refresh_pair(self):
+        b = self.app.bridge
+        self.l_code.configure(text=b.code if b.code_valid() else "หมดอายุ", text_color=ACC if b.code_valid() else DIM)
+        n = len(b.tokens())
+        seen = time.time() - b.last_seen
+        st = f"จับคู่แล้ว {n} ตัว" if n else "ยังไม่ได้จับคู่"
+        if n and b.last_seen:
+            st += " · ติดต่อล่าสุด " + (f"{int(seen)} วิที่แล้ว" if seen < 90 else f"{int(seen // 60)} นาทีที่แล้ว")
+        if b.error:
+            st = f"⚠ เปิดพอร์ต {bridge.PORT} ไม่ได้: {b.error}"
+        self.l_pair.configure(text=st)
+
+    def new_code(self):
+        self.app.bridge.new_code()
+        self.refresh_pair()
+
+    def unpair(self):
+        n = self.app.bridge.unpair_all()
+        self.app.log(f"🧩 ยกเลิกการจับคู่ส่วนขยายแล้ว ({n})")
+        self.refresh_pair()
 
     def export_cfg(self):
         self.app.sync_cfg()
@@ -2023,6 +2061,8 @@ class App(ctk.CTk):
         self.timer_end, self.timer_action = None, None
         self.ipc = ipc.CommandServer(self)
         self.ipc.start()
+        self.bridge = bridge.Bridge(self)      # ส่วนขยาย Chrome คุยผ่านตัวนี้
+        self.bridge.start()
         config.dbg(f"app init ok v{config.VERSION}")
 
         self.side = ctk.CTkFrame(self, width=212, corner_radius=0, fg_color=SIDE)
