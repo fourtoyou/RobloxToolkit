@@ -227,7 +227,15 @@ def bufferbloat_test(progress=None, seconds=8):
     mbps = sent[0] * 8 / el / 1e6
     extra = (up["avg"] - idle["avg"]) if (up["avg"] is not None and idle["avg"] is not None) else None
     grade, level = bufferbloat_grade(extra)
-    if grade in ("A", "B"):
+    # ค่าเฉลี่ยดีแต่มีสไปก์ (สูงสุดพุ่ง / jitter สูง) = เกมยังวาร์ปเป็นพักๆ → ลดเกรดลงและบอกตรงๆ
+    spike = (up["max"] - idle["avg"]) if (up["max"] is not None and idle["avg"] is not None) else 0
+    spiky = spike >= 100 or (up["jitter"] or 0) >= 30
+    if spiky and grade in ("A", "B"):
+        grade, level = "C", "orange"
+    if spiky and grade == "C":
+        advice = (f"เฉลี่ยยังโอเค แต่มีสไปก์ถึง {up['max']:.0f} ms (jitter {up['jitter']:.0f}) — พอมีอะไรอัปโหลดเป็นช่วงๆ เกมจะวาร์ปเป็นพักๆ "
+                  "· เปิดสวิตช์ 'หยุด OneDrive ตอนเกมเปิด' · ปิดแบ็กอัปรูปบนมือถือที่แชร์เน็ต · ถ้าใช้ hotspot ลองเสียบสาย USB tethering แทน Wi-Fi")
+    elif grade in ("A", "B"):
         advice = "เน็ตนิ่งดี — อัปโหลดหนักก็ไม่ทำเกมกระตุก"
     elif grade == "C":
         advice = "พอเริ่มมีอะไรอัปโหลด ping จะขึ้นให้รู้สึก — ปิด OneDrive/อัปโหลดพื้นหลังตอนเล่นช่วยได้"
