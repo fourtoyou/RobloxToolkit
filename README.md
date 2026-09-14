@@ -30,7 +30,7 @@
 - หน้าสถิติ: ปุ่ม "แชร์การ์ดสัปดาห์" วาดการ์ดสถิติ 7 วันเป็นรูป + ส่งเข้า Discord ถ้าตั้ง webhook ไว้
 - **คลังประวัติถาวร** `sessions.json` — Roblox ลบ log ตัวเองทิ้งเรื่อยๆ (เคยมี 436 ไฟล์ เหลือ 21 ในวันเดียว) โปรแกรมจึงเก็บเซสชันที่อ่านได้ไว้เองตลอด เก็บ 2 ปี
 - ข้อมูล/ตั้งค่าอยู่ที่ `%USERPROFILE%\.robloxtoolkit\` (`status.json` ให้ Discord bot อ่าน · `cmd/` `res/` รับคำสั่งจากบอท) — ไม่ใช้ AppData เพราะ Python จาก Microsoft Store จำลองโฟลเดอร์นั้น
-- รองรับ Roblox ทั้งตัวปกติ/Bloxstrap (`%LOCALAPPDATA%\Roblox\logs`) และตัว **Microsoft Store / Xbox app** (`%LOCALAPPDATA%\RobloxPCGDK\logs`) — หน้าสุขภาพระบบจะบอกว่าที่เปิดอยู่เป็นตัวไหน (Bloxstrap ไม่มีผลกับตัว Store)
+- รองรับ Roblox ทั้งตัวปกติ/Bloxstrap (`%LOCALAPPDATA%\Roblox\logs`) และตัว **Microsoft Store / Xbox app** (`%LOCALAPPDATA%\RobloxPCGDK\logs`) — หน้าสุขภาพระบบจะบอกว่าที่เปิดอยู่เป็นตัวไหน (Bloxstrap ไม่มีผลกับตัว Store แต่ FastFlag ของ Toolkit ใส่ให้ตัว Store ได้ที่ XboxGames\Roblox\Content)
 
 ## สั่งจาก Discord (ผ่าน bot.หมา)
 บอทเขียนไฟล์คำสั่งลง `cmd/` → Toolkit ทำแล้วตอบใน `res/` (ไม่เปิดพอร์ต ไม่ต้องตั้งค่าอะไร)

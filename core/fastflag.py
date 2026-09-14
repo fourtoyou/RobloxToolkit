@@ -14,7 +14,8 @@ Roblox ประกาศว่าตัวเกมจะ "อ่านเฉ�
 ที่มา: devforum.roblox.com/t/allowlist-for-local-client-configuration-via-fast-flags/3966569
 
 ข้อจำกัดอื่นที่ต้องบอกผู้ใช้:
-- ใช้ได้กับ Roblox เวอร์ชันปกติเท่านั้น · เวอร์ชัน Microsoft Store/Xbox อยู่ใน WindowsApps ซึ่งเขียนไม่ได้
+- เวอร์ชัน Microsoft Store/Xbox app ใช้ได้เหมือนกัน: เกมอยู่ที่ <drive>:\\XboxGames\\Roblox\\Content (เขียนได้ ไม่ใช่ WindowsApps)
+  โปรแกรมเขียนไฟล์ให้ทั้งสองแบบพร้อมกัน — เคยเข้าใจผิดว่าตัว Store ตั้งไม่ได้จนถึง v2.11
 - Roblox อัปเดต = โฟลเดอร์เวอร์ชันใหม่ ต้องเขียนใส่ใหม่ (เรามีปุ่ม/เช็คตอนเปิดโปรแกรมให้)
 - ต้องปิด-เปิดเกมใหม่ ค่าถึงจะมีผล
 - FastFlag ไม่ใช่การโกง เป็นค่าตั้งของ Roblox เอง แต่ใส่มั่วอาจทำเกมพัง (มีปุ่มล้างทิ้ง)
@@ -142,13 +143,34 @@ EXTRAS = {
 }
 
 
+def store_dirs():
+    r"""Roblox จาก Microsoft Store/Xbox app — <drive>:\XboxGames\Roblox\Content (+ โฟลเดอร์ของตัวที่รันอยู่ถ้าไม่ใช่แบบ Versions)"""
+    out = []
+    for drive in "CDEFGHIJ":
+        d = f"{drive}:\\XboxGames\\Roblox\\Content"
+        if os.path.exists(os.path.join(d, "RobloxPlayerBeta.exe")):
+            out.append(d)
+    try:
+        rd = running_dir()
+        if rd and os.path.exists(os.path.join(rd, "RobloxPlayerBeta.exe")) and "\\Versions\\" not in rd and rd not in out:
+            out.append(rd)
+    except Exception:
+        pass
+    return out
+
+
+def is_store(d):
+    return "\\Versions\\" not in (d or "")
+
+
 def version_dirs():
-    """โฟลเดอร์เวอร์ชันของ Roblox ที่เป็นตัวเล่นเกม (มี RobloxPlayerBeta.exe)"""
+    """ทุกที่ที่ต้องเขียน FastFlag: โฟลเดอร์ Versions ของตัวปกติ (ใหม่สุดก่อน) + ตัว Store/Xbox"""
     out = []
     for d in glob.glob(os.path.join(config.LOCAL, "Roblox", "Versions", "version-*")):
         if os.path.exists(os.path.join(d, "RobloxPlayerBeta.exe")):
             out.append(d)
-    return sorted(out, key=os.path.getmtime, reverse=True)
+    out = sorted(out, key=os.path.getmtime, reverse=True)
+    return out + store_dirs()
 
 
 def running_dir():
@@ -186,7 +208,7 @@ def write(flags):
     """เขียนลงทุกเวอร์ชันที่เจอ (เผื่อ Roblox สลับเวอร์ชัน) — คืน (จำนวนที่เขียนได้, ข้อความ)"""
     dirs = version_dirs()
     if not dirs:
-        return 0, "ไม่เจอโฟลเดอร์ Roblox เวอร์ชันปกติ (เวอร์ชัน Microsoft Store ตั้ง FastFlag ไม่ได้)"
+        return 0, "ไม่เจอ Roblox ในเครื่อง (ทั้งตัวปกติและตัว Microsoft Store)"
     n = 0
     for d in dirs:
         try:
@@ -199,7 +221,9 @@ def write(flags):
             n += 1
         except OSError as e:
             config.dbg(f"fastflag write {d}: {e}")
-    return n, (f"เขียน {n}/{len(dirs)} เวอร์ชันแล้ว — ปิด-เปิด Roblox ใหม่ค่าถึงจะมีผล" if n else "เขียนไม่ได้ (สิทธิ์ไม่พอ?)")
+    kinds = sum(1 for d in dirs if is_store(d))
+    where = f"{len(dirs) - kinds} ตัวปกติ + {kinds} ตัว Store" if kinds else f"{len(dirs)} เวอร์ชัน"
+    return n, (f"เขียน {n}/{len(dirs)} ที่แล้ว ({where}) — ปิด-เปิด Roblox ใหม่ค่าถึงจะมีผล" if n else "เขียนไม่ได้ (สิทธิ์ไม่พอ?)")
 
 
 def clear():

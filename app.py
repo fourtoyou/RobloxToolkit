@@ -1793,15 +1793,16 @@ class FlagPage(Page):
         flags, _vdir = fastflag.current()
         dirs = fastflag.version_dirs()
         if not dirs:
-            self.l_state.configure(text="⚠   เครื่องนี้ตั้ง FastFlag ไม่ได้", text_color=WARN)
-            self.l_state2.configure(text="เครื่องนี้ใช้ Roblox เวอร์ชัน Microsoft Store/Xbox ซึ่งไฟล์เกมอยู่ในโฟลเดอร์ที่ Windows ห้ามเขียน "
-                                         "— ถ้าอยากใช้ FastFlag ต้องลง Roblox ตัวปกติจาก roblox.com (สวิตช์ในข้อ 4 ยังใช้ได้ปกติ)")
+            self.l_state.configure(text="⚠   ไม่เจอ Roblox ในเครื่อง", text_color=WARN)
+            self.l_state2.configure(text="ไม่พบทั้งตัวปกติ (%LOCALAPPDATA%\\Roblox\\Versions) และตัว Microsoft Store (XboxGames\\Roblox) — ลง Roblox ก่อน")
         elif flags:
             live = len([k for k in flags if k in fastflag.ALLOWLIST])
             dead = len(flags) - live
             self.l_state.configure(text=f"🟢   มี FastFlag อยู่ {len(flags)} ตัว · ใช้ได้จริง {live} ตัว"
                                         + (f" · ถูกเมิน {dead} ตัว" if dead else ""), text_color=ACC)
-            self.l_state2.configure(text=f"เจอ Roblox {len(dirs)} เวอร์ชัน (ใส่ให้ทุกเวอร์ชัน) · แก้แล้วต้องปิด-เปิดเกมใหม่ค่าถึงจะมีผล")
+            ns = sum(1 for d in dirs if fastflag.is_store(d))
+            self.l_state2.configure(text=f"เจอ Roblox {len(dirs) - ns} ตัวปกติ + {ns} ตัว Microsoft Store (ใส่ให้ทุกตัว) · แก้แล้วต้องปิด-เปิดเกมใหม่ค่าถึงจะมีผล"
+                                         + ("  ·  ตัวที่เปิดอยู่ตอนนี้: Microsoft Store" if fastflag.is_store(_vdir or "x") and _vdir else ""))
         else:
             self.l_state.configure(text="⚪   ยังไม่ได้ตั้ง FastFlag", text_color=DIM)
             self.l_state2.configure(text=f"เจอ Roblox {len(dirs)} เวอร์ชัน — เลือกระดับแล้วกด 'ใช้ค่านี้' โปรแกรมจะใส่ให้ทุกเวอร์ชัน")
