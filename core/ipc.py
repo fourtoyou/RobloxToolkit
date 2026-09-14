@@ -184,8 +184,11 @@ class CommandServer(threading.Thread):
             return self.reply(cmd, msg=f"เอากลับมา {eng.unhide_all()} หน้าต่าง")
         if c == "launch":
             from . import launcher
-            launcher.launch(cmd.get("place"), cmd.get("job"))
-            return self.reply(cmd, msg=f"เปิดเกม {cmd.get('place')}")
+            if cmd.get("job"):
+                launcher.launch(cmd.get("place"), cmd.get("job"))
+                return self.reply(cmd, msg=f"เปิดเกม {cmd.get('place')} เข้าเซิร์ฟที่ระบุ")
+            launcher.launch_best(cmd.get("place"), app.log)      # ไม่ระบุเซิร์ฟ → เลือกเซิร์ฟที่ว่างและ ping ต่ำสุดให้
+            return self.reply(cmd, msg=f"เปิดเกม {app.place_name(cmd.get('place'))} (เลือกเซิร์ฟ ping ต่ำสุดให้)")
         if c == "status":
             sw = app.swatch
             return self.reply(cmd, running=eng.running, hidden=len(eng.hidden), windows=len(roblox_windows(True)),

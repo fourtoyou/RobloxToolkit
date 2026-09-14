@@ -4,7 +4,7 @@ import os
 import sys
 
 APP_NAME = "RobloxToolkit"
-VERSION = "2.7.0"
+VERSION = "2.8.0"
 LOCAL = os.environ.get("LOCALAPPDATA", ".")
 # เก็บข้อมูลไว้นอก AppData\Local เพราะ Python จาก Microsoft Store จำลอง (virtualize) โฟลเดอร์นั้น
 # ทำให้ Discord bot (รันด้วย Python) กับ Toolkit (.exe) มองเห็นไฟล์คนละชุด

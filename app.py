@@ -1796,7 +1796,7 @@ class HealthPage(Page):
         self.list.pack(fill="x", padx=20, pady=8)
         b = ctk.CTkFrame(self, fg_color="transparent")
         b.pack(fill="x", padx=20)
-        ctk.CTkButton(b, text="ซ่อม Bloxstrap (handler + shortcut)", font=F, command=self.fix).pack(side="left")
+        ctk.CTkButton(b, text="ซ่อมตัวเปิดเกม (handler + shortcut)", font=F, command=self.fix).pack(side="left")
         ctk.CTkButton(b, text="ล้าง log เก่ากว่า 7 วัน", font=F, fg_color=BTN, hover_color=BTNH, command=self.clean).pack(side="left", padx=6)
         self.v_auto = ctk.BooleanVar(value=health.autostart_get())
         self.v_bs = ctk.BooleanVar(value=health.bloxstrap_integration_get())

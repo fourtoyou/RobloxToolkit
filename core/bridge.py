@@ -188,6 +188,12 @@ class Bridge(threading.Thread):
         st["ok"] = True
         st["log"] = list(self.app.log_lines)[-12:]
         st["version"] = config.VERSION
+        st["timer_end"], st["timer_action"] = self.app.timer_end, self.app.timer_action
+        try:
+            from . import launcher
+            st["favorites"] = [{"place": f["place"], "name": f.get("name")} for f in launcher.load_favs()[:8]]
+        except Exception:
+            st["favorites"] = []
         return st
 
     def screen(self):
