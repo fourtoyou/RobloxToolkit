@@ -93,24 +93,31 @@ def install_and_restart(new_exe):
     cur = sys.executable
     pid = os.getpid()
     bat = os.path.join(tempfile.gettempdir(), "rtk_update.bat")
+    log = os.path.join(tempfile.gettempdir(), "rtk_update.log")
+    # ห้ามใช้ timeout.exe — ไม่มีคอนโซลจริงมันพังทันที (เคยเจอกับ VBS launcher ของบอท) ใช้ ping หน่วงเวลาแทน
     script = "\r\n".join([
         "@echo off",
+        f'echo [%date% %time%] wait pid {pid} >> "{log}"',
         "set N=0",
         ":wait",
-        f'tasklist /NH /FI "PID eq {pid}" 2>nul | findstr /C:" {pid} " >nul',   # find ธรรมดาหาไม่เจอบนเครื่องภาษาไทย ใช้ findstr
+        f'tasklist /NH /FI "PID eq {pid}" 2>nul | findstr /C:" {pid} " >nul',
         "if errorlevel 1 goto go",
         "set /a N+=1",
-        "if %N% GEQ 90 goto fail",          # ไม่ใช้บล็อก ( ) เพราะ %N% ในบล็อกถูกขยายครั้งเดียว = 0 ตลอด → วนไม่จบ
-        "timeout /t 1 /nobreak >nul",
+        "if %N% GEQ 120 goto fail",          # ไม่ใช้บล็อก ( ) เพราะ %N% ในบล็อกถูกขยายครั้งเดียว = 0 ตลอด → วนไม่จบ
+        "ping -n 2 127.0.0.1 >nul",
         "goto wait",
         ":go",
+        f'echo [%date% %time%] copying >> "{log}"',
         f'copy /y "{cur}" "{cur}.old" >nul',
         f'copy /y "{new_exe}" "{cur}" >nul || goto fail',
         f'del /q "{new_exe}" >nul 2>&1',
+        f'echo [%date% %time%] starting new exe >> "{log}"',
         f'start "" "{cur}"',
         f'del /q "{cur}.old" >nul 2>&1',
+        f'echo [%date% %time%] done >> "{log}"',
         "exit",
         ":fail",
+        f'echo [%date% %time%] FAILED (N=%N%) restoring >> "{log}"',
         f'if exist "{cur}.old" copy /y "{cur}.old" "{cur}" >nul',
         f'start "" "{cur}"',
         "exit",
@@ -118,6 +125,8 @@ def install_and_restart(new_exe):
     ])
     with open(bat, "w", encoding="ascii", errors="replace") as f:
         f.write(script)
-    CREATE_NO_WINDOW, DETACHED = 0x08000000, 0x00000008
-    subprocess.Popen(["cmd", "/c", bat], creationflags=CREATE_NO_WINDOW | DETACHED, close_fds=True)
+    # CREATE_NO_WINDOW อย่างเดียว (cmd ได้คอนโซลซ่อนของตัวเอง อยู่ต่อได้หลังเราปิด) — ห้ามใส่ DETACHED_PROCESS
+    CREATE_NO_WINDOW = 0x08000000
+    subprocess.Popen(["cmd.exe", "/c", bat], creationflags=CREATE_NO_WINDOW, close_fds=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return bat
