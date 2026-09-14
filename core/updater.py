@@ -91,25 +91,42 @@ def install_and_restart(new_exe):
     if not getattr(sys, "frozen", False):
         raise RuntimeError("รันจากซอร์สอยู่ — ใช้ git pull แทน")
     cur = sys.executable
-    pid = os.getpid()
+    # PyInstaller --onefile มี 2 โปรเซส: bootloader (แม่) ถือไฟล์ .exe ไว้จนกว่าจะปิด + python (ลูก) ที่รันโค้ดนี้
+    # ต้องรอทั้งคู่ ไม่งั้นก๊อปทับไม่ได้ (เจอจริงตอนทดสอบ 2.9.3→2.9.4: "FAILED (N=1)")
+    pids = [os.getpid()]
+    try:
+        pids.append(os.getppid())
+    except Exception:
+        pass
     bat = os.path.join(tempfile.gettempdir(), "rtk_update.bat")
     log = os.path.join(tempfile.gettempdir(), "rtk_update.log")
-    # ห้ามใช้ timeout.exe — ไม่มีคอนโซลจริงมันพังทันที (เคยเจอกับ VBS launcher ของบอท) ใช้ ping หน่วงเวลาแทน
+    wait_lines = []
+    for p in pids:
+        wait_lines += [f'tasklist /NH /FI "PID eq {p}" 2>nul | findstr /C:" {p} " >nul', "if not errorlevel 1 goto again"]
+    # ห้ามใช้ timeout.exe — ไม่มีคอนโซลจริงมันพังทันที ใช้ ping หน่วงเวลาแทน · ห้ามใช้บล็อก ( ) เพราะ %N% ในบล็อกไม่ขยาย
     script = "\r\n".join([
         "@echo off",
-        f'echo [%date% %time%] wait pid {pid} >> "{log}"',
+        f'echo [%date% %time%] wait pids {" ".join(map(str, pids))} >> "{log}"',
         "set N=0",
+        "set C=0",
         ":wait",
-        f'tasklist /NH /FI "PID eq {pid}" 2>nul | findstr /C:" {pid} " >nul',
-        "if errorlevel 1 goto go",
+        *wait_lines,
+        "goto go",
+        ":again",
         "set /a N+=1",
-        "if %N% GEQ 120 goto fail",          # ไม่ใช้บล็อก ( ) เพราะ %N% ในบล็อกถูกขยายครั้งเดียว = 0 ตลอด → วนไม่จบ
+        "if %N% GEQ 120 goto fail",
         "ping -n 2 127.0.0.1 >nul",
         "goto wait",
         ":go",
-        f'echo [%date% %time%] copying >> "{log}"',
         f'copy /y "{cur}" "{cur}.old" >nul',
-        f'copy /y "{new_exe}" "{cur}" >nul || goto fail',
+        ":copy",
+        "set /a C+=1",
+        f'copy /y "{new_exe}" "{cur}" >nul && goto started',
+        f'echo [%date% %time%] copy retry %C% (ไฟล์ยังถูกถือไว้ / OneDrive) >> "{log}"',
+        "if %C% GEQ 40 goto fail",
+        "ping -n 2 127.0.0.1 >nul",
+        "goto copy",
+        ":started",
         f'del /q "{new_exe}" >nul 2>&1',
         f'echo [%date% %time%] starting new exe >> "{log}"',
         f'start "" "{cur}"',
@@ -117,8 +134,9 @@ def install_and_restart(new_exe):
         f'echo [%date% %time%] done >> "{log}"',
         "exit",
         ":fail",
-        f'echo [%date% %time%] FAILED (N=%N%) restoring >> "{log}"',
+        f'echo [%date% %time%] FAILED (N=%N% C=%C%) restoring >> "{log}"',
         f'if exist "{cur}.old" copy /y "{cur}.old" "{cur}" >nul',
+        f'del /q "{cur}.old" >nul 2>&1',
         f'start "" "{cur}"',
         "exit",
         "",
