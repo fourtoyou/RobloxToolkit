@@ -58,16 +58,22 @@ class LogWatcher(threading.Thread):
 
     def scan(self):
         now = time.time()
+        first = not self.files          # สแกนครั้งแรกหลังเปิดโปรแกรม
         with self.lock:
             for d in config.LOG_DIRS:
-                for p in glob.glob(os.path.join(d, "*_Player_*.log")):
+                paths = glob.glob(os.path.join(d, "*_Player_*.log"))
+                newest = max(paths, key=lambda x: os.path.getmtime(x), default=None) if paths else None
+                for p in paths:
                     try:
                         mtime = os.path.getmtime(p)
                     except OSError:
                         continue
                     st = self.files.get(p)
                     if st is None:
-                        if now - mtime > 600:
+                        # log ของเกมที่เปิดค้างอยู่อาจไม่ถูกเขียนนานเกิน 10 นาที (ยืนนิ่งในเกม) —
+                        # ตอนเปิดโปรแกรมครั้งแรกให้อ่านไฟล์ล่าสุดของแต่ละที่เสมอถ้า Roblox กำลังรัน ไม่งั้นจะคิดว่าไม่ได้อยู่ในเกม
+                        keep = (first and p == newest and now - mtime < 12 * 3600 and roblox_pids())
+                        if now - mtime > 600 and not keep:
                             continue
                         st = self.files[p] = {"pos": 0, "job": None, "place": None, "handled": True, "server": None}
                         self.backfill(p, st)

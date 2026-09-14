@@ -14,7 +14,7 @@ from tkinter import filedialog
 
 import customtkinter as ctk
 
-from core import analytics, bridge, charts, clicker, config, filecheck, health, ipc, launcher, macro, notify, schedule, servers, session, sysmon, updater
+from core import analytics, bridge, charts, clicker, config, doctor, filecheck, health, ipc, launcher, macro, notify, schedule, servers, session, sysmon, updater
 from core import fastflag, fpscap, ui
 from core.antiafk import Engine, reason_text
 from core.history import History, fmt_dur, fmt_reason
@@ -135,8 +135,55 @@ class HomePage(Page):
                       command=self.quiet).pack(side="left", padx=8)
         ctk.CTkButton(row, text="🔄 รีเซ็ตตัวละคร", font=F, height=34, fg_color=BTN, hover_color=BTNH,
                       command=lambda: threading.Thread(target=app.eng.reset_character, daemon=True).start()).pack(side="left", padx=8)
+        ctk.CTkButton(row, text="🩺 ทำไมไม่ลื่น? ตรวจเลย", font=FB, height=34, command=self.doctor).pack(side="left", padx=8)
         self.l_hint = ctk.CTkLabel(self, text="", font=FS, text_color=DIM)
         self.l_hint.pack(anchor="w", padx=22, pady=(0, 10))
+
+    # ---------- หมอเครื่อง ----------
+    def doctor(self):
+        app = self.app
+        win = ctk.CTkToplevel(app)
+        win.title("ทำไมเกมไม่ลื่น?")
+        win.geometry("760x560")
+        win.attributes("-topmost", True)
+        ctk.CTkLabel(win, text="🩺 กำลังตรวจ...", font=FH2, text_color=TXT).pack(anchor="w", padx=20, pady=(16, 4))
+        body = ctk.CTkScrollableFrame(win, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        ICON = {"ok": ("✅", ACC), "warn": ("⚠", WARN), "bad": ("❌", BAD), "info": ("ℹ", INFO)}
+        FIX = {"hz": ("ใช้ Hz สูงสุด", lambda: app.pages["flag"].max_hz()),
+               "ff": ("ตั้ง FastFlag แนะนำ", lambda: (app.show("flag"), app.pages["flag"].recommend())),
+               "pri": ("เปิด High priority", lambda: (app.pages["flag"].v_pri.set(True), app.pages["flag"].set_pri())),
+               "bb": ("ไปหน้าเน็ต", lambda: app.show("net")),
+               "od": ("เปิดหยุด OneDrive", lambda: (app.cfg.__setitem__("pause_onedrive", True), config.save(app.cfg), app.pages["net"].v_od.set(True))),
+               "gpu": ("เปิดหน้าตั้งค่า Windows", lambda: os.startfile("ms-settings:display-advancedgraphics"))}
+
+        def show(items, summary):
+            for w in win.winfo_children():
+                if isinstance(w, ctk.CTkLabel):
+                    w.configure(text=f"🩺 {summary}")
+            for it in items:
+                ic, col = ICON.get(it["level"], ("•", DIM))
+                card = ctk.CTkFrame(body, fg_color=CARD, corner_radius=12)
+                card.pack(fill="x", pady=3)
+                top = ui.row(card)
+                top.pack(fill="x", padx=12, pady=(8, 0))
+                ctk.CTkLabel(top, text=f"{ic}  {it['title']}", font=FB, text_color=col, anchor="w").pack(side="left")
+                if it.get("fix") in FIX and it["level"] != "ok":
+                    label, fn = FIX[it["fix"]]
+                    ctk.CTkButton(top, text=label, width=150, height=28, font=FS,
+                                  command=lambda fn=fn, c=card: (fn(), c.configure(border_width=2, border_color=ACC))).pack(side="right")
+                if it.get("detail"):
+                    ctk.CTkLabel(card, text=it["detail"], font=FS, text_color=DIM, justify="left", wraplength=640, anchor="w").pack(fill="x", padx=14, pady=(0, 8))
+                else:
+                    ctk.CTkLabel(card, text="", height=4).pack()
+
+        def work():
+            try:
+                items, summary = doctor.run(app)
+            except Exception as e:
+                items, summary = [dict(key="err", level="bad", title=f"ตรวจไม่ได้: {e}", detail="", fix=None)], "ตรวจไม่สำเร็จ"
+            app.ui(lambda: show(items, summary))
+        threading.Thread(target=work, daemon=True).start()
 
     # ---------- ปุ่มด่วน ----------
     def snap(self):

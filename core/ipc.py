@@ -146,6 +146,10 @@ class CommandServer(threading.Thread):
         app, eng = self.app, self.app.eng
         c = cmd.get("cmd")
         app.log(f"📡 คำสั่งจาก {cmd.get('_from', 'Discord')}: {c}")
+        if c == "doctor":
+            from . import doctor as _doc
+            items, summary = _doc.run(app)
+            return self.reply(cmd, summary=summary, items=[{k: v for k, v in it.items() if k != "fix"} for it in items])
         if c == "netcheck":
             from . import netmon as _nm
             r = _nm.bufferbloat_test()
