@@ -19,6 +19,7 @@
 | ⚙ ตั้งค่า | แจ้งเตือน Discord webhook, **Session Recap** (การ์ดสรุปหลังเล่นจบ → toast + Discord), **Watchdog** (Roblox ค้าง >30 วิ → เปิดกลับเซิร์ฟเดิม · Roblox แครช/ปิดตัวเองระหว่าง Anti-AFK → เปิดกลับ · เก็บกวาด Roblox ที่ค้างเบื้องหลังไม่มีหน้าต่าง), **Adaptive delay** (โดนเตะ idle ทั้งที่ทำงานอยู่ → กดถี่ขึ้นเอง), **Overlay** มุมจอ (F9), เช็คอัปเดต , **เปิด Roblox หลายหน้าต่าง** (หลายบัญชี), **ส่งออก/นำเข้าค่าตั้ง** |
 
 ## อัปเดตอัตโนมัติ
+- Release ล่าสุด: https://github.com/fourtoyou/RobloxToolkit/releases/latest (ไฟล์ `RobloxToolkit.exe` + SHA256 ในโน้ต) · โปรแกรมตั้ง repo `fourtoyou/RobloxToolkit` ไว้ให้แล้ว
 - หน้าตั้งค่า → ใส่ repo (`ชื่อGitHub/RobloxToolkit`) → **เช็คอัปเดต** → ถ้ามีใหม่กด **⬇ ติดตั้งเวอร์ชันใหม่** โปรแกรมโหลด ตรวจขนาด + SHA256 แล้วเปิดตัวเองใหม่
 - ปล่อยเวอร์ชัน: แก้ `VERSION` ใน `core/config.py` → commit → `git tag v2.9.0 && git push --tags` → GitHub Actions build .exe และสร้าง Release พร้อม SHA256 ให้เอง (`.github/workflows/release.yml`)
 
