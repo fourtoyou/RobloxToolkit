@@ -63,11 +63,22 @@ class ScreenWatch(threading.Thread):
         if im is None:
             raise RuntimeError(msg)
         big = im.resize((im.width * 2, im.height * 2), Image.BICUBIC)
-        # สลับชื่อไฟล์ 3 ชื่อ — PowerShell/WinRT ยังถือไฟล์ที่เพิ่งอ่านไว้แป๊บหนึ่ง เขียนทับทันทีจะติด "Invalid argument"
-        self._n = (getattr(self, "_n", 0) + 1) % 3
-        path = os.path.join(DIR, f"frame{self._n}.png")
+        # ชื่อไฟล์ไม่ซ้ำทุกครั้ง — WinRT (StorageFile) ถือไฟล์ที่เพิ่งอ่านไว้จนกว่า GC จะเก็บ เขียนทับชื่อเดิมจะติด "[Errno 22] Invalid argument"
+        self._n = getattr(self, "_n", 0) + 1
+        path = os.path.join(DIR, f"frame_{self._n % 1000:03d}.png")
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            path = os.path.join(DIR, f"frame_{int(time.time() * 1000)}.png")
         big.save(path, compress_level=1)
         lines = ocr.get().recognize(path)
+        # ลบเฟรมเก่าแบบไม่ซีเรียส (ตัวที่ยังถูกถืออยู่จะลบไม่ได้ ค่อยลบรอบหน้า)
+        for old in sorted(glob.glob(os.path.join(DIR, "frame_*.png")))[:-4]:
+            try:
+                os.remove(old)
+            except OSError:
+                pass
         self._last_im = im          # เก็บภาพขนาดจริงไว้ทำรูปแจ้งเตือน ไม่ต้องเปิดไฟล์ซ้ำ
         return lines, path
 

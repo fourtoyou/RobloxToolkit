@@ -31,8 +31,9 @@ while ($true) {
     $bitmap = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
     $result = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
     $result.Lines | ForEach-Object { Write-Output $_.Text }
-    $stream.Dispose(); $bitmap.Dispose()
+    $stream.Dispose(); $bitmap.Dispose(); $decoder = $null; $file = $null; $result = $null
   } catch { Write-Output ("<<ERR " + $_.Exception.Message + ">>") }
+  [GC]::Collect(); [GC]::WaitForPendingFinalizers()
   Write-Output "<<END>>"
 }
 """
