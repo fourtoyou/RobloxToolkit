@@ -2,7 +2,6 @@
 ทำไมต้องมี: เกมแนว Steal An Egg ไข่หายากโผล่เป็นครั้งคราว ผู้ใช้ AFK อยู่ในเซิร์ฟคนน้อยที่หายาก ไม่อยากออกไปหาใหม่ อยากรู้ทันทีตอนมันโผล่
 วิธี: PrintWindow (ถ่ายได้แม้ถูกบัง/ซ่อน alpha 0 — แต่ไม่ได้ถ้าย่อ) → ขยาย 2 เท่า (OCR ขนาดจริงอ่านแทบไม่ได้) → Windows OCR
 ไม่แตะโปรเซสเกมเลย เป็นแค่การถ่ายจอ"""
-import difflib
 import glob
 import os
 import re
@@ -39,10 +38,25 @@ def fuzzy_in(word, line):
         return True
     if " " in wl or len(wl) < 5:
         return False
+    # ยอมให้เพี้ยนได้ 1 ตัวอักษร (แทน/เพิ่ม/หาย) — "Seeret", "Divlne", "Cerberuk" นับ · "secure"/"External"/"secretary" ไม่นับ
     for tok in re.findall(r"[a-z0-9\-]{4,}", ll):
-        if abs(len(tok) - len(wl)) <= 2 and difflib.SequenceMatcher(None, wl, tok).ratio() >= 0.8:
+        if abs(len(tok) - len(wl)) <= 1 and _lev1(wl, tok):
             return True
     return False
+
+
+def _lev1(a, b):
+    """ระยะแก้ไข (Levenshtein) ≤ 1 ไหม"""
+    if a == b:
+        return True
+    if len(a) == len(b):
+        return sum(x != y for x, y in zip(a, b)) == 1
+    if len(a) > len(b):
+        a, b = b, a
+    i = 0
+    while i < len(a) and a[i] == b[i]:
+        i += 1
+    return a[i:] == b[i + 1:]
 
 
 class ScreenWatch(threading.Thread):
