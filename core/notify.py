@@ -20,6 +20,25 @@ def discord(url, title, desc, color=0x2EE6A8):
     threading.Thread(target=_send, daemon=True).start()
 
 
+def discord_file(url, title, desc, path, color=0x2EE6A8):
+    """webhook พร้อมรูปแนบ (multipart) — ใช้ตอนเฝ้าจอเจอของ จะได้เห็นภาพบนมือถือเลย"""
+    if not url or "discord" not in url:
+        return
+
+    def _send():
+        try:
+            import json
+            import requests
+            payload = {"embeds": [{"title": title, "description": desc, "color": color, "image": {"url": "attachment://hit.png"},
+                                   "footer": {"text": "Roblox Toolkit"}, "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())}]}
+            with open(path, "rb") as f:
+                requests.post(url, data={"payload_json": json.dumps(payload)}, files={"files[0]": ("hit.png", f, "image/png")}, timeout=15)
+        except Exception:
+            pass
+
+    threading.Thread(target=_send, daemon=True).start()
+
+
 def toast(title, msg):
     """แจ้งเตือนมุมจอด้วย PowerShell (ไม่ต้องลงอะไรเพิ่ม)"""
     def _t():

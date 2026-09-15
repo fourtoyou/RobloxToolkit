@@ -180,24 +180,51 @@ def roblox_muted():
 
 # ---------- เปิด Roblox ได้หลายตัว ----------
 _mutex = None
+_k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_owned = False      # เราเป็นเจ้าของ mutex แล้ว (= Roblox ตัวใหม่จะไม่ปิดตัวเก่า)
 
 
 def multi_instance(on=True):
-    """จอง mutex ที่ Roblox ใช้กันเปิดซ้ำ → เปิดได้หลายหน้าต่าง (เทคนิคเดียวกับที่ทุกเจ้าใช้)"""
-    global _mutex
+    """เปิด Roblox ได้หลายหน้าต่าง — จอง mutex "ROBLOX_singletonMutex" ที่ไคลเอนต์ใช้กันเปิดซ้ำ (ชื่อจาก log: waitForNewPlayerProcess ... mutex)
+    ถ้า Roblox เปิดอยู่ตอนกด จะได้แค่ handle (Roblox เป็นเจ้าของ) → multi_instance_tick() จะยึดเป็นเจ้าของเองทันทีที่ Roblox ตัวสุดท้ายปิด
+    เดิมใช้ชื่อ "ROBLOX_singletonEvent" ซึ่งผิด (เป็น Event คนละอย่าง) → ตัวที่สองสั่งปิดตัวแรกแล้วเข้าแทนตลอด"""
+    global _mutex, _owned
     if on:
         if _mutex:
             return True
-        _mutex = k.CreateMutexW(None, True, "ROBLOX_singletonEvent")
-        return bool(_mutex)
+        _mutex = k.CreateMutexW(None, True, "ROBLOX_singletonMutex")
+        if not _mutex:
+            return False
+        _owned = ctypes.get_last_error() != 183 and k.GetLastError() != 183
+        if not _owned:
+            multi_instance_tick()
+        return True
     if _mutex:
+        if _owned:
+            k.ReleaseMutex(_mutex)
         k.CloseHandle(_mutex)
-        _mutex = None
+        _mutex, _owned = None, False
+    return False
+
+
+def multi_instance_tick():
+    """ลองยึด mutex แบบไม่รอ — สำเร็จเมื่อไม่มี Roblox ถืออยู่ (WAIT_OBJECT_0 / WAIT_ABANDONED) · คืน True ถ้าเพิ่งยึดได้"""
+    global _owned
+    if not _mutex or _owned:
+        return False
+    r = k.WaitForSingleObject(_mutex, 0)
+    if r in (0, 0x80):
+        _owned = True
+        return True
     return False
 
 
 def multi_instance_on():
     return _mutex is not None
+
+
+def multi_instance_owned():
+    return bool(_mutex) and _owned
 
 
 # ---------- ให้ Roblox ได้ CPU ก่อนโปรแกรมอื่น ----------
