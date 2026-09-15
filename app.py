@@ -14,7 +14,7 @@ from tkinter import filedialog
 
 import customtkinter as ctk
 
-from core import analytics, bridge, charts, clicker, config, doctor, filecheck, health, ipc, launcher, macro, notify, schedule, screenwatch, servers, session, sysmon, updater
+from core import analytics, bridge, charts, clicker, config, doctor, filecheck, health, ipc, launcher, macro, notify, schedule, servers, session, sysmon, updater
 from core import fastflag, fpscap, ui
 from core.antiafk import Engine, reason_text
 from core.history import History, fmt_dur, fmt_reason
@@ -60,108 +60,6 @@ class Page(ctk.CTkFrame):
 
     def on_show(self):
         pass
-
-
-# =====================================================================
-class WatchPage(Page):
-    """👁 เฝ้าจอ — OCR หน้าต่างเกมหาคำที่ตั้งไว้ (ชื่อไข่/ของหายาก) แล้วแจ้งเตือน ไม่ต้องนั่งเฝ้า/ไม่ต้องรีเซิร์ฟ"""
-
-    def __init__(self, master, app):
-        super().__init__(master, app)
-        c = app.cfg
-        ui.head(self, "เฝ้าจอ — เตือนเมื่อเห็นคำที่ต้องการบนจอเกม",
-                "ถ่ายหน้าต่าง Roblox ทุกไม่กี่วิ แล้วให้ Windows อ่านตัวหนังสือ (OCR) · เจอชื่อไข่/ของหายากที่ตั้งไว้ → เสียง + แจ้งเตือน + ส่งรูปเข้า Discord · ไม่แตะตัวเกม", "👁")
-        top = ui.card(self)
-        top.pack(fill="x", padx=20, pady=(6, 8))
-        self.v_on = ctk.BooleanVar(value=bool(c.get("watch_on")))
-        ui.switch_row(top, "เปิดเฝ้าจอ", self.v_on, "ทำงานตอนมีหน้าต่าง Roblox เท่านั้น · ถ้าย่อหน้าต่างจะถ่ายไม่ได้ — ใช้ปุ่ม 'ซ่อน' ในหน้า Anti-AFK แทนการย่อ", cmd=self.apply, pady=(10, 2))
-        row = ui.row(top)
-        row.pack(fill="x", padx=16, pady=(4, 10))
-        ctk.CTkLabel(row, text="ทุก", font=F).pack(side="left")
-        self.v_iv = ctk.StringVar(value=str(c.get("watch_interval", 8)))
-        ctk.CTkEntry(row, textvariable=self.v_iv, width=50, font=F, justify="center").pack(side="left", padx=6)
-        ctk.CTkLabel(row, text="วิ   ·   เจอคำเดิมซ้ำ เตือนอีกครั้งหลัง", font=F).pack(side="left")
-        self.v_cd = ctk.StringVar(value=str(c.get("watch_cooldown", 120)))
-        ctk.CTkEntry(row, textvariable=self.v_cd, width=60, font=F, justify="center").pack(side="left", padx=6)
-        ctk.CTkLabel(row, text="วิ", font=F).pack(side="left")
-        self.v_beep = ctk.BooleanVar(value=c.get("watch_beep", True))
-        ctk.CTkSwitch(row, text="เสียงเตือน", variable=self.v_beep, font=F, command=self.apply).pack(side="right")
-
-        body = ctk.CTkFrame(self, fg_color="transparent")
-        body.pack(fill="both", expand=True, padx=20, pady=(0, 12))
-        left = ui.card(body)
-        left.pack(side="left", fill="both", expand=True)
-        ui.title(left, "คำที่ต้องการ (บรรทัดละคำ · ไม่สนตัวพิมพ์เล็ก-ใหญ่)")
-        ui.note(left, "ตัวอย่างสำหรับ Steal An Egg: ชื่อระดับความหายาก หรือชื่อไข่ตัวที่อยากได้ — ดูคำที่อ่านได้จริงจากปุ่ม 'อ่านจอตอนนี้' แล้วก๊อปมาใส่")
-        self.t_words = ctk.CTkTextbox(left, font=F, height=180)
-        self.t_words.pack(fill="both", expand=True, padx=14, pady=(4, 6))
-        self.t_words.insert("1.0", "\n".join(c.get("watch_words") or []))
-        ctk.CTkButton(left, text="💾 บันทึกคำ", font=FB, height=32, command=self.apply).pack(anchor="w", padx=14, pady=(0, 12))
-
-        right = ui.card(body, width=420)
-        right.pack(side="left", fill="both", padx=(10, 0))
-        right.pack_propagate(False)
-        ui.title(right, "สถานะ")
-        self.l_state = ctk.CTkLabel(right, text="", font=F, text_color=DIM, justify="left", anchor="w", wraplength=380)
-        self.l_state.pack(fill="x", padx=14)
-        ctk.CTkButton(right, text="🔍 อ่านจอตอนนี้ (ดูว่า OCR เห็นอะไร)", font=FB, height=32, command=self.read_now).pack(anchor="w", padx=14, pady=(8, 4))
-        self.t_seen = ctk.CTkTextbox(right, font=FS, height=150, text_color=TXT2)
-        self.t_seen.pack(fill="both", expand=True, padx=14, pady=(0, 6))
-        ui.title(right, "เจอล่าสุด")
-        self.t_hits = ctk.CTkTextbox(right, font=FS, height=110, text_color=TXT2)
-        self.t_hits.pack(fill="x", padx=14, pady=(0, 6))
-        ctk.CTkButton(right, text="📂 เปิดโฟลเดอร์รูปที่เจอ", font=FS, height=28, fg_color=BTN, hover_color=BTNH,
-                      command=lambda: os.startfile(screenwatch.DIR)).pack(anchor="w", padx=14, pady=(0, 12))
-
-    def apply(self):
-        words = [w.strip() for w in self.t_words.get("1.0", "end").splitlines() if w.strip()]
-        try:
-            iv, cd = int(self.v_iv.get()), int(self.v_cd.get())
-        except ValueError:
-            iv, cd = 8, 120
-        self.app.cfg["watch_beep"] = self.v_beep.get()
-        self.app.watch.configure(on=self.v_on.get(), words=words, interval=iv, cooldown=cd)
-        self.app.log(f"👁 เฝ้าจอ: {'เปิด' if self.v_on.get() else 'ปิด'} · {len(words)} คำ · ทุก {self.app.watch.interval} วิ")
-        self.refresh()
-
-    def read_now(self):
-        self.t_seen.delete("1.0", "end")
-        self.t_seen.insert("1.0", "กำลังอ่าน...")
-
-        def work():
-            try:
-                lines, _ = self.app.watch.read_once()
-                self.app.watch.last_text, self.app.watch.last_at, self.app.watch.last_err = lines, time.time(), None
-                txt = "\n".join(lines) if lines else "(ไม่เจอตัวหนังสือที่อ่านได้)"
-            except Exception as e:
-                txt = f"อ่านไม่ได้: {e}"
-            self.app.ui(lambda: (self.t_seen.delete("1.0", "end"), self.t_seen.insert("1.0", txt), self.refresh()))
-        threading.Thread(target=work, daemon=True).start()
-
-    def refresh(self):
-        w = self.app.watch
-        self.v_on.set(w.enabled)
-        if not w.enabled:
-            st, col = "○ ปิดอยู่", DIM
-        elif w.last_err:
-            st, col = f"⚠ {w.last_err}", WARN
-        elif w.last_at:
-            rs = ""
-            if w.reset_at:
-                d = int(w.reset_at - time.time())
-                rs = f" · 🔥 ช่วงรีเซ็ต สแกนถี่" if -5 <= -d <= 45 else (f" · รีเซ็ตเกมอีก {d // 60}:{d % 60:02d}" if d > 0 else "")
-            st, col = f"● กำลังเฝ้า · อ่านล่าสุด {int(time.time() - w.last_at)} วิที่แล้ว ({w.last_ms} ms) · สแกนแล้ว {w.scans} ครั้ง · {len(w.words)} คำ{rs}", ACC
-        else:
-            st, col = "● กำลังเริ่ม...", ACC
-        self.l_state.configure(text=st, text_color=col)
-        self.t_hits.delete("1.0", "end")
-        self.t_hits.insert("1.0", "\n".join(f"{time.strftime('%H:%M:%S', time.localtime(h['t']))}  {h['word']}  —  {h['line']}" for h in list(w.hits)[:8]) or "ยังไม่เจอ")
-
-    def on_show(self):
-        self.refresh()
-
-    def tick(self):
-        self.refresh()
 
 
 # =====================================================================
@@ -2363,7 +2261,7 @@ class SettingsPage(Page):
 class App(ctk.CTk):
     TIMER_ACTIONS = ("หยุด Anti-AFK", "ปิด Roblox", "ปิด Roblox + Sleep เครื่อง", "ปิดเครื่อง")
     # ("#", "ชื่อกลุ่ม") = หัวข้อคั่น ไม่ใช่ปุ่ม
-    NAV = [("#", "ใช้งาน"), ("home", "🏠   หน้าแรก"), ("afk", "🎮   Anti-AFK"), ("games", "🚀   เกมโปรด"), ("click", "🖱   ออโต้คลิก"), ("watch", "👁   เฝ้าจอ"),
+    NAV = [("#", "ใช้งาน"), ("home", "🏠   หน้าแรก"), ("afk", "🎮   Anti-AFK"), ("games", "🚀   เกมโปรด"), ("click", "🖱   ออโต้คลิก"),
            ("#", "ความลื่น"), ("flag", "⚡   FastFlag"), ("sys", "🖥   เครื่อง"), ("net", "📶   เน็ต"),
            ("#", "ย้อนดู"), ("stats", "📊   สถิติ"), ("analytics", "📈   วิเคราะห์"), ("history", "🕘   ประวัติ"),
            ("#", "อื่นๆ"), ("file", "🛡   ตรวจไฟล์"), ("health", "🩺   สุขภาพระบบ"), ("settings", "⚙   ตั้งค่า")]
@@ -2412,8 +2310,6 @@ class App(ctk.CTk):
         self.dog.enabled = self.cfg["watchdog"]
         self.dog.start()
         self.timer_end, self.timer_action = None, None
-        self.watch = screenwatch.ScreenWatch(self)
-        self.watch.start()
         self.ipc = ipc.CommandServer(self)
         self.ipc.start()
         self.bridge = bridge.Bridge(self)      # ส่วนขยาย Chrome คุยผ่านตัวนี้
@@ -2462,7 +2358,7 @@ class App(ctk.CTk):
                       "analytics": AnalyticsPage(self.container, self), "click": ClickPage(self.container, self),
                       "sys": SysPage(self.container, self), "flag": FlagPage(self.container, self),
                       "history": HistoryPage(self.container, self), "net": NetPage(self.container, self), "file": FilePage(self.container, self),
-                      "health": HealthPage(self.container, self), "settings": SettingsPage(self.container, self), "watch": WatchPage(self.container, self)}
+                      "health": HealthPage(self.container, self), "settings": SettingsPage(self.container, self)}
         self.current = None
         self.show("home" if not self.cfg.get("seen_home") or True else "afk")
         self.fit_window()
@@ -2709,16 +2605,6 @@ class App(ctk.CTk):
             self.log(f"⚠ {d['title']} — {d['body']}")
             notify.toast(d["title"], d["body"])
             notify.discord(c["webhook_url"], "⚠ " + d["title"], d["body"], d["color"])
-            return
-        if kind == "watch_hit":
-            txt = f"👁 เจอ '{d['word']}' บนจอ: {d['line']}"
-            self.game_events.insert(0, (time.time(), txt))
-            self.log(txt)
-            notify.toast(f"เจอ {d['word']}!", d["line"][:80])
-            if c.get("watch_beep", True):
-                threading.Thread(target=lambda: [u.MessageBeep(0x40), time.sleep(0.25), u.MessageBeep(0x40)], daemon=True).start()
-            notify.discord_file(c["webhook_url"], f"👁 เจอ {d['word']}!", d["line"], d["image"], 0xFFC857)
-            self.ui(self.pages["watch"].refresh)
             return
         if kind == "ram_trim":
             msg = f"คืนแรมอัตโนมัติ: {d['procs']} โปรเซส · ว่างเพิ่ม {d['freed']:.0f} MB ({d['before']:.0f}% → {d['after']:.0f}%)"
@@ -3013,7 +2899,7 @@ class App(ctk.CTk):
         try:
             if self.timer_end and time.time() >= self.timer_end:
                 self.run_timer_action()
-            if self.current in ("home", "afk", "net", "click", "sys", "watch"):
+            if self.current in ("home", "afk", "net", "click", "sys"):
                 self.pages[self.current].tick()
             e = self.eng
             cur = e.watcher.current
@@ -3073,7 +2959,7 @@ class App(ctk.CTk):
                     "server_ping": self.swatch.ping, "join_result": self.join_result, "join_pending": bool(self.join_want),
                     "dc": cur.get("dc"), "dc_label": self.net.dc_label(cur.get("dc"), self.swatch.ping),
                     "wifi": self.sys.wifi, "multi": {"on": fpscap.multi_instance_on(), "owned": fpscap.multi_instance_owned()},
-                    "watch": self.watch.status(),
+
                     "ram_apps": self.last_ram_apps,
                     "clicking": self.click.running, "clicks": self.click.clicks,
                     "fps_cap": self.cfg["fps_cap"] if self.cfg["fps_cap_on"] else 0, "fps_capping": self.fps.capping,

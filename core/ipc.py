@@ -146,20 +146,6 @@ class CommandServer(threading.Thread):
         app, eng = self.app, self.app.eng
         c = cmd.get("cmd")
         app.log(f"📡 คำสั่งจาก {cmd.get('_from', 'Discord')}: {c}")
-        if c == "watch":
-            # เฝ้าจอ: {on, words:[..], interval, cooldown} → ตั้งค่า · ไม่ส่งอะไร = แค่ดูสถานะ
-            w = app.watch
-            if any(k in cmd for k in ("on", "words", "interval", "cooldown")):
-                w.configure(on=cmd.get("on"), words=cmd.get("words"), interval=cmd.get("interval"), cooldown=cmd.get("cooldown"))
-                app.ui(app.pages["watch"].refresh)
-            return self.reply(cmd, **w.status())
-        if c == "watch_text":
-            try:
-                lines, path = app.watch.read_once()
-                app.watch.last_text, app.watch.last_at, app.watch.last_err = lines, time.time(), None
-                return self.reply(cmd, lines=lines, image=path)
-            except Exception as e:
-                return self.reply(cmd, ok=False, msg=str(e))
         if c == "ram":
             from .sysmon import top_apps
             cur = app.sys.cur
