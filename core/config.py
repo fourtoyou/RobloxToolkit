@@ -5,7 +5,7 @@ import time
 import sys
 
 APP_NAME = "RobloxToolkit"
-VERSION = "2.20.1"
+VERSION = "2.20.2"
 DEFAULT_REPO = "fourtoyou/RobloxToolkit"   # GitHub ที่ปล่อย Release (อัปเดตอัตโนมัติอ่านจากที่นี่)
 LOCAL = os.environ.get("LOCALAPPDATA", ".")
 # เก็บข้อมูลไว้นอก AppData\Local เพราะ Python จาก Microsoft Store จำลอง (virtualize) โฟลเดอร์นั้น
@@ -68,7 +68,7 @@ DEFAULTS = {
     "click_only_roblox": True, "click_max_min": 0, "click_max_clicks": 0,
     "sys_alerts": True, "gpu_temp_limit": 85, "ram_limit": 92, "auto_trim_ram": False,
     # 👁 เฝ้าจอ: OCR หน้าต่างเกมหาคำที่ตั้งไว้ (ชื่อไข่/ของหายาก) แล้วแจ้งเตือน
-    "watch_on": False, "watch_words": ["Secret", "Mythic", "Legendary", "Godly"], "watch_interval": 8, "watch_cooldown": 120, "watch_beep": True,
+    "watch_on": False, "watch_words": ["Secret", "Eternal", "Divine", "Cosmic"], "watch_interval": 8, "watch_cooldown": 30, "watch_beep": True,
     "fps_cap_on": False, "fps_cap": 5, "fps_unlock_focus": True,   # จำกัด FPS ตอนไม่ได้โฟกัสเกม
     "automute": False,          # ปิดเสียง Roblox ตอน Anti-AFK ทำงาน
     "multi_instance": False,    # เปิด Roblox ได้หลายหน้าต่าง

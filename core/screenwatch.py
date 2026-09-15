@@ -90,14 +90,18 @@ class ScreenWatch(threading.Thread):
             self.last_at = time.time()
             self.last_err = None
             low = [l.lower() for l in lines]
+            now = time.time()
+            # ประกาศไข่หายากอยู่ในแชท ซึ่งค้างบนจอนานหลายนาที — จำ "บรรทัด" ที่เคยเจอไว้ 30 นาที ไม่งั้นจะเตือนซ้ำทุกรอบ cooldown ทั้งที่เป็นข้อความเดิม
+            self._seen = {k: t for k, t in getattr(self, "_seen", {}).items() if now - t < 1800}
             for w in self.words:
                 wl = w.lower()
-                hit_line = next((lines[i] for i, l in enumerate(low) if wl in l), None)
+                hit_line = next((lines[i] for i, l in enumerate(low) if wl in l and "".join(ch for ch in l if ch.isalnum()) not in self._seen), None)
                 if hit_line is None:
                     continue
-                if time.time() - self._last_hit.get(w, 0) < self.cooldown:
+                if now - self._last_hit.get(w, 0) < self.cooldown:
                     continue
-                self._last_hit[w] = time.time()
+                self._last_hit[w] = now
+                self._seen["".join(ch for ch in hit_line.lower() if ch.isalnum())] = now
                 snap = os.path.join(DIR, f"hit_{int(time.time())}_{w[:12]}.png")
                 try:
                     im = self._last_im
