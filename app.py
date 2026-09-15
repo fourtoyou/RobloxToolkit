@@ -2671,11 +2671,15 @@ class App(ctk.CTk):
             cause = ""
             if d["reason"] != 285:
                 self.sess.disconnects += 1
-                cause, kind_ = self.net.diagnose_drop()
+                # วิเคราะห์เน็ตเฉพาะตอนหลุดแบบ "การเชื่อมต่อหาย" — โดนเตะ/ล็อกอินที่อื่น/เซิร์ฟปิด สาเหตุคือรหัสนั้นเอง ไม่ใช่เน็ต
+                if d["reason"] in (277, 266, 276, 260, 262):
+                    cause, kind_ = self.net.diagnose_drop()
+                else:
+                    cause, kind_ = d["text"], "kick"
                 links = [txt for t, txt in self.link_events if t >= time.time() - 120]
                 wifi = self.sys.wifi
                 extra = (" · " + ", ".join(links[:2]) if links else "") + (f" · Wi-Fi '{wifi[0]}' {wifi[1]}%" if wifi and wifi[1] is not None else "")
-                short = {"link": "สาย/Wi-Fi หลุด", "isp": "มือถือหลุดจากเสา", "loss": "เน็ตสะดุด", "server": "ฝั่งเซิร์ฟ", "gray": "?"}.get(kind_, "?")
+                short = {"link": "สาย/Wi-Fi หลุด", "isp": "มือถือหลุดจากเสา", "loss": "เน็ตสะดุด", "server": "ฝั่งเซิร์ฟ", "kick": d["text"], "gray": "?"}.get(kind_, "?")
                 config.add_drop({"t": time.time(), "reason": d["reason"], "text": d["text"], "place": d.get("place"), "place_name": self.place_name(d.get("place")),
                                  "kind": kind_, "cause": cause + extra, "cause_short": short, "dc": self.eng.watcher.current.get("dc"),
                                  "wifi": wifi, "links": links[:3]})
