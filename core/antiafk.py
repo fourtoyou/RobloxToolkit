@@ -269,8 +269,9 @@ class Engine:
             if n == 0:
                 self.log("ยังไม่เจอหน้าต่าง Roblox")
             # กดไม่ติดสักหน้าต่าง (หรือไม่เจอหน้าต่างเลย) → อย่ารออีก 10 นาที ไม่งั้นครบ 20 นาทีโดนเตะ
-            self.last_fail = self.last_fail + 1 if ok_n == 0 else 0
-            if self.last_fail == 2:
+            # นับว่า "กดไม่ติด" เฉพาะตอนมีหน้าต่างเกมจริง — ไม่มีหน้าต่างเลย/เกมกำลังโหลด (ยังไม่ได้อยู่ในเซิร์ฟ) ไม่ใช่ความเสี่ยงโดนเตะ idle
+            self.last_fail = self.last_fail + 1 if (ok_n == 0 and n > 0) else 0
+            if self.last_fail == 2 and self.watcher.current.get("in_game"):
                 self.log("⚠ กดไม่ติด 2 ครั้งติด — เสี่ยงโดนเตะ idle กำลังลองถี่ขึ้นทุก 1 นาที")
                 self.emit("poke_failing", {"times": self.last_fail})
             self.emit("poke", {"count": n})
