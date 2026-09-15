@@ -146,7 +146,11 @@ class WatchPage(Page):
         elif w.last_err:
             st, col = f"⚠ {w.last_err}", WARN
         elif w.last_at:
-            st, col = f"● กำลังเฝ้า · อ่านล่าสุด {int(time.time() - w.last_at)} วิที่แล้ว ({w.last_ms} ms) · สแกนแล้ว {w.scans} ครั้ง · {len(w.words)} คำ", ACC
+            rs = ""
+            if w.reset_at:
+                d = int(w.reset_at - time.time())
+                rs = f" · 🔥 ช่วงรีเซ็ต สแกนถี่" if -5 <= -d <= 45 else (f" · รีเซ็ตเกมอีก {d // 60}:{d % 60:02d}" if d > 0 else "")
+            st, col = f"● กำลังเฝ้า · อ่านล่าสุด {int(time.time() - w.last_at)} วิที่แล้ว ({w.last_ms} ms) · สแกนแล้ว {w.scans} ครั้ง · {len(w.words)} คำ{rs}", ACC
         else:
             st, col = "● กำลังเริ่ม...", ACC
         self.l_state.configure(text=st, text_color=col)
