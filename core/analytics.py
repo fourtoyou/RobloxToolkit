@@ -91,13 +91,60 @@ def sessions_stats(sessions, days=30):
     return {"count": len(lst), "avg": sum(durs) / len(durs), "longest": max(lst, key=lambda s: s["end"] - s["start"])}
 
 
-def insights(sessions, name_fn=lambda p: p, days=30):
+def server_distance(sessions, dc_map, days=30):
+    """เวลาเล่นแยกตามระยะเซิร์ฟ (จาก DC ที่จำ ping ไว้) — คืน dict(near, mid, far, unknown เป็นวินาที) + top DC"""
+    out = {"near": 0.0, "mid": 0.0, "far": 0.0, "unknown": 0.0}
+    per_dc = Counter()
+    for s in _recent(sessions, days):
+        dur = max(0.0, s["end"] - s["start"])
+        info = (dc_map or {}).get(str(s.get("dc"))) if s.get("dc") is not None else None
+        p = (info or {}).get("ping")
+        if p is None:
+            out["unknown"] += dur
+        else:
+            out["near" if p <= 70 else "mid" if p <= 150 else "far"] += dur
+            per_dc[s["dc"]] += dur
+    return out, per_dc
+
+
+def drop_causes(days=30):
+    """สาเหตุหลุดจาก drops.json (Toolkit วิเคราะห์ตอนหลุด ตั้งแต่ v2.17)"""
+    from . import config
+    cut = time.time() - days * 86400
+    c = Counter()
+    for d in config.load_drops():
+        if d.get("t", 0) >= cut and d.get("reason") != 285:
+            c[d.get("cause_short") or "?"] += 1
+    return c
+
+
+def insights(sessions, name_fn=lambda p: p, days=30, dc_map=None):
     """ข้อสังเกตเป็นภาษาคน — คืน list ของ (ไอคอน, ข้อความ)"""
     out = []
     lst = _recent(sessions, days)
     if not lst:
         return [("📭", f"ยังไม่มีข้อมูลใน {days} วันล่าสุด")]
     from .history import fmt_dur, fmt_reason
+
+    # เซิร์ฟไกล/ใกล้ — ข้อสังเกตที่ทำอะไรต่อได้จริง (ต่างกันได้ 70 ms ต่อทุกการกระทำ)
+    if dc_map:
+        dist, per_dc = server_distance(sessions, dc_map, days)
+        known = dist["near"] + dist["mid"] + dist["far"]
+        if known >= 600:
+            far = dist["mid"] + dist["far"]
+            if far / known >= 0.3:
+                top = per_dc.most_common(1)[0][0] if per_dc else None
+                tp = (dc_map.get(str(top)) or {}).get("ping")
+                out.append(("🌏", f"{far / known * 100:.0f}% ของเวลาเล่น ({fmt_dur(far)}) อยู่บนเซิร์ฟกลาง/ไกล" + (f" — บ่อยสุด DC {top} ~{tp} ms" if tp else "")
+                            + " · ส่วนขยาย Chrome ตั้ง 'ping ต่ำก่อน' แล้วกด ⚡ จะได้สิงคโปร์ ~35 ms"))
+            else:
+                out.append(("🌏", f"{dist['near'] / known * 100:.0f}% ของเวลาเล่นอยู่บนเซิร์ฟใกล้ (≤70 ms) — ดีแล้ว"))
+    dcs = drop_causes(days)
+    if dcs:
+        top_c = dcs.most_common(1)[0]
+        out.append(("🔎", f"หลุดที่วิเคราะห์สาเหตุได้ {sum(dcs.values())} ครั้ง — บ่อยสุด: {top_c[0]} ({top_c[1]} ครั้ง)"
+                    + {"สาย/Wi-Fi หลุด": " → เช็คสาย USB/ระยะจากมือถือ", "มือถือหลุดจากเสา": " → ขยับมือถือหาสัญญาณ/ล็อก 4G",
+                       "เน็ตสะดุด": " → อย่าให้อะไรอัปโหลดตอนเล่น", "ฝั่งเซิร์ฟ": " → ไม่ใช่ความผิดเครื่องเรา"}.get(top_c[0], "")))
 
     wd, seen = weekday(sessions, days)
     if any(wd):

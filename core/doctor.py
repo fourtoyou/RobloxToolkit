@@ -236,6 +236,14 @@ def run(app=None):
     except Exception:
         pass
 
+    # 6d) เปิดพร้อม Windows — รีบูตแล้วลืมเปิด = Anti-AFK/ต่อใหม่/เฝ้าเน็ต/หมอ ไม่ทำงานเลย
+    try:
+        from .health import autostart_get
+        if not autostart_get():
+            out.append(dict(key="auto", level="info", title="Toolkit ไม่ได้เปิดพร้อม Windows", detail="รีบูตแล้วลืมเปิด → Anti-AFK / ต่อใหม่อัตโนมัติ / วิเคราะห์หลุด ไม่ทำงาน", fix="auto"))
+    except Exception:
+        pass
+
     # 7) RAM / แบต
     if app:
         c = app.sys.cur

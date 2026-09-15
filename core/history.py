@@ -9,7 +9,9 @@ import time
 from datetime import datetime, timezone
 
 from . import config
-from .antiafk import RE_DISC, RE_JOIN, reason_text
+from .antiafk import RE_DC, RE_DISC, RE_JOIN, reason_text
+
+CACHE_VER = 2      # 2 = มี dc ต่อเซสชัน — เปลี่ยนเลขแล้วไฟล์เก่าจะถูกอ่านใหม่รอบเดียว
 
 RE_TS = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\.(\d{3})Z")
 _names_lock = threading.Lock()
@@ -29,7 +31,7 @@ def parse_file(path):
     try:
         with open(path, "rb") as f:
             for raw in f:
-                if b"Joining game" not in raw and b"Sending disconnect" not in raw and b"shutDown" not in raw:
+                if b"Joining game" not in raw and b"Sending disconnect" not in raw and b"shutDown" not in raw and b"DatacenterId=" not in raw:
                     # เก็บเวลาบรรทัดล่าสุดแบบประหยัด: เช็คแค่บรรทัดที่ขึ้นต้นด้วยปี
                     if raw[:2] == b"20":
                         last_ts = raw[:24]
@@ -45,6 +47,11 @@ def parse_file(path):
                         cur["end"], cur["reason"] = t, 0
                     cur = {"start": t, "end": None, "place": m.group(2), "job": m.group(1), "reason": None}
                     sessions.append(cur)
+                    continue
+                m = RE_DC.search(line)
+                if m:
+                    if cur and cur["end"] is None:
+                        cur["dc"] = int(m.group(1))
                     continue
                 m = RE_DISC.search(line)
                 if m and cur and cur["end"] is None:
@@ -88,6 +95,9 @@ def save_archive(arch):
 class History:
     def __init__(self):
         self.cache = config.load_cache()
+        if self.cache.get("hist_ver") != CACHE_VER:
+            self.cache["files"] = {}
+            self.cache["hist_ver"] = CACHE_VER
         self.cache.setdefault("files", {})
         self.cache.setdefault("names", {})
         self.archive = load_archive()

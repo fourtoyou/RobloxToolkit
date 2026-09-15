@@ -163,7 +163,8 @@ class HomePage(Page):
                "bb": ("ไปหน้าเน็ต", lambda: app.show("net")),
                "od": ("เปิดหยุด OneDrive", lambda: (app.cfg.__setitem__("pause_onedrive", True), config.save(app.cfg), app.pages["net"].v_od.set(True))),
                "gpu": ("เปิดหน้าตั้งค่า Windows", lambda: os.startfile("ms-settings:display-advancedgraphics")),
-               "ram": ("คืนแรม (ชั่วคราว)", lambda: threading.Thread(target=self.trim_ram, daemon=True).start())}
+               "ram": ("คืนแรม (ชั่วคราว)", lambda: threading.Thread(target=self.trim_ram, daemon=True).start()),
+               "auto": ("เปิดพร้อม Windows", lambda: (health.autostart_set(True), app.log("ตั้งค่าเปิดพร้อม Windows แล้ว")))}
 
         def show(items, summary):
             for w in win.winfo_children():
@@ -1116,7 +1117,7 @@ class AnalyticsPage(Page):
                     "games": charts.game_bars(s["games"], app.hist.name, w=404, h=230),
                     "reason": charts.reason_bars(analytics.disconnects(sess, d)["by_reason"], w=404, h=230),
                 }
-                tips = analytics.insights(sess, app.hist.name, d)
+                tips = analytics.insights(sess, app.hist.name, d, app.net.dc_map)
                 note = (f"คลังประวัติของโปรแกรม: {len(sess)} เซสชัน "
                         f"(เก็บเองถาวร — log ของ Roblox ถูกลบทิ้งเองเรื่อยๆ ข้อมูลเก่าจึงจะค่อยๆ สะสมจากนี้)")
                 app.ui(lambda: self.show(pics, tips, note))

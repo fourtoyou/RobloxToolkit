@@ -265,6 +265,14 @@ class CommandServer(threading.Thread):
             return self.reply(cmd, players=sw.players, max_players=sw.maxp, quiet=sw.quiet, ping=sw.ping,
                               seen=sw.seen, sample=sw.sample, limited=_srv.limited(),
                               auto_hop=app.cfg["auto_hop"], hop_over=app.cfg["hop_over"], hops=sw.hops)
+        if c == "insights":
+            from . import analytics as _an
+            days = max(1, min(int(cmd.get("days", 30) or 30), 3650))
+            if not app.hist.sessions:
+                app.hist.scan()
+            s_ = app.hist.summary(days)
+            return self.reply(cmd, days=days, total=s_["total"], sessions=s_["sessions"],
+                              tips=[[ic, tx] for ic, tx in _an.insights(app.hist.sessions, app.hist.name, days, app.net.dc_map)])
         if c == "analytics":
             from . import charts
             days = max(1, min(int(cmd.get("days", 30) or 30), 3650))
