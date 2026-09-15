@@ -147,11 +147,12 @@ class ScreenWatch(threading.Thread):
             self.last_text = lines
             self.last_at = time.time()
             self.last_err = None
-            for l in lines:
-                m = RE_COUNTDOWN.search(l)
-                if m:
-                    self.reset_at = time.time() + int(m.group(1))     # จูนเวลารีเซ็ตจากนาฬิกาจริงบนจอ
-                    break
+            if self.app.cfg.get("watch_sync"):          # ผู้ใช้บอกไม่ต้องจับจังหวะรีเซ็ต — ปิดไว้เป็นค่าเริ่มต้น (เปิดได้ใน settings.json: watch_sync)
+                for l in lines:
+                    m = RE_COUNTDOWN.search(l)
+                    if m:
+                        self.reset_at = time.time() + int(m.group(1))     # จูนเวลารีเซ็ตจากนาฬิกาจริงบนจอ
+                        break
             low = [l.lower() for l in lines]
             now = time.time()
             # ประกาศไข่หายากอยู่ในแชท ซึ่งค้างบนจอนานหลายนาที — จำ "บรรทัด" ที่เคยเจอไว้ 30 นาที ไม่งั้นจะเตือนซ้ำทุกรอบ cooldown ทั้งที่เป็นข้อความเดิม
@@ -197,6 +198,8 @@ class ScreenWatch(threading.Thread):
             # รอบรีเซ็ตของเกม: ไข่หายากสุ่ม/ประกาศตอนนั้น → สแกนถี่ทุก 2 วิ ช่วง -5..+45 วิ แล้วคาดรอบถัดไป +cycle
             now = time.time()
             iv = self.interval
+            if not self.app.cfg.get("watch_sync"):
+                self.reset_at = None
             if self.reset_at:
                 if now > self.reset_at + 45:
                     while self.reset_at + 45 < now:
