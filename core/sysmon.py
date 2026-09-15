@@ -158,6 +158,8 @@ class SysMonitor(threading.Thread):
         self.wifi = None                 # (ssid, signal%) หรือ None ถ้าไม่ได้ใช้ Wi-Fi — อ่านทุก 30 วิ
         self._weak_since = None
         self._trim_t = 0
+        self._disc_t = 0
+        self._disc_dead_since = None     # Discord.exe เปิดอยู่แต่ไม่มี connection ตั้งแต่เมื่อไหร่
 
     # ---------- อ่านค่า ----------
     def sample(self):
@@ -287,10 +289,37 @@ class SysMonitor(threading.Thread):
         except Exception as e:
             config.dbg(f"auto trim: {e}")
 
+    def discord_tick(self, now):
+        """แอป Discord เปิดอยู่แต่ต่อไม่ได้เกิน 2 นาที → เช็ค gateway ว่าล่มฝั่ง Discord หรือเน็ตเรา แล้วบอกผู้ใช้ (cooldown 30 นาที)"""
+        if now - self._disc_t < 30:
+            return
+        self._disc_t = now
+        from . import discordcheck
+        running, n = discordcheck.app_connected()
+        if not running or n != 0:
+            self._disc_dead_since = None
+            return
+        self._disc_dead_since = self._disc_dead_since or now
+        if now - self._disc_dead_since < 120:
+            return
+        r = discordcheck.probe(3)
+        if r["verdict"] == "discord_down":
+            code = next((c for c in r["codes"] if isinstance(c, int) and c >= 500), "5xx")
+            self._alert("discord_down", "Discord ล่มฝั่ง Discord — ไม่ใช่เน็ตคุณ",
+                        f"gateway.discord.gg ตอบ {code} (แอปเลยค้างหน้าโหลด บอทก็หลุด) — รอเฉยๆ เดี๋ยวต่อเอง · เช็คได้ที่ discordstatus.com", 0xFFC857, cooldown=1800)
+        elif r["verdict"] == "unreachable":
+            self._alert("discord_unreach", "ต่อ Discord ไม่ได้จากเครื่องนี้", "เน็ต/DNS ฝั่งเรา — ลองเปิดเว็บอื่นดู ถ้าเปิดไม่ได้เหมือนกันคือเน็ตหลุด", 0xFF5D7A, cooldown=1800)
+        else:
+            self._alert("discord_stuck", "แอป Discord ค้าง (Discord เองปกติ)", f"เปิดอยู่แต่ไม่ต่อมา {int((now - self._disc_dead_since) / 60)} นาที — กด Ctrl+R ในแอป หรือปิดจากถาดแล้วเปิดใหม่", 0xFFC857, cooldown=1800)
+
     def net_tick(self, now):
         self.link_tick(now)
         self.wifi_tick(now)
         self.trim_tick(now)
+        try:
+            self.discord_tick(now)
+        except Exception as e:
+            config.dbg(f"discord_tick: {e}")
         from .win import roblox_pids
         in_game = bool(roblox_pids())
         up = self.avg("up_mbps", 20)

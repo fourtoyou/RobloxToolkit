@@ -203,6 +203,38 @@ def run(app=None):
     except Exception:
         pass
 
+    # 6c) Discord: แอปต่อได้ไหม / gateway ล่มไหม / บอทของเรามีชีวิตไหม
+    try:
+        from . import discordcheck
+        running, n = discordcheck.app_connected()
+        if running:
+            if n == 0:
+                r = discordcheck.probe(2)
+                code = next((c for c in r["codes"] if isinstance(c, int) and c >= 500), None)
+                if r["verdict"] == "discord_down":
+                    out.append(dict(key="disc", level="warn", title=f"Discord ล่มฝั่ง Discord (gateway ตอบ {code})", detail="ไม่ใช่เน็ตคุณ — แอปจะค้างหน้าโหลดจนกว่าเขาจะฟื้น · discordstatus.com", fix=None))
+                elif r["verdict"] == "unreachable":
+                    out.append(dict(key="disc", level="bad", title="ต่อ Discord ไม่ได้จากเครื่องนี้", detail="เน็ต/DNS ฝั่งเรา", fix=None))
+                else:
+                    out.append(dict(key="disc", level="info", title="แอป Discord เปิดอยู่แต่ยังไม่ได้ต่อ (Discord เองปกติ)", detail="เพิ่งเปิด? ถ้าค้างนาน กด Ctrl+R ในแอป", fix=None))
+            else:
+                _, inc = discordcheck.status_page(4)
+                out.append(dict(key="disc", level="info" if inc else "ok", title=f"Discord ต่ออยู่ ({n} connection)" + (f" — แต่ Discord ประกาศปัญหา: {inc}" if inc else ""),
+                                detail="อาจหลุด/ช้าเป็นพักๆ จนกว่าเขาจะแก้เสร็จ (discordstatus.com)" if inc else "", fix=None))
+        bot_dir = cfg.get("bot_dir") or os.path.join(os.path.expanduser("~"), "Downloads", "DiscordBot")
+        hb = os.path.join(bot_dir, "bot.alive")
+        if os.path.exists(hb):
+            try:
+                age = time.time() - float(open(hb).read().strip())
+                if age < 120:
+                    out.append(dict(key="bot", level="ok", title=f"บอท Discord ทำงานอยู่ (สัญญาณชีพ {int(age)} วิที่แล้ว)", detail="", fix=None))
+                else:
+                    out.append(dict(key="bot", level="warn", title=f"บอท Discord ไม่ส่งสัญญาณชีพมา {int(age / 60)} นาที", detail="ตัวเฝ้า (launcher) จะเปิดใหม่เองถ้าเกิน 5 นาที · ถ้ายังไม่กลับ ดู bot.log", fix=None))
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     # 7) RAM / แบต
     if app:
         c = app.sys.cur
