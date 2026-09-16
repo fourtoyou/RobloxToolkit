@@ -151,6 +151,85 @@ def key_down(vk):
     return bool(u.GetAsyncKeyState(vk) & 0x8000)
 
 
+# ---------- สถานะปุ่ม "กายภาพ" (ไม่นับอินพุตที่เราส่งเอง) ----------
+# โหมดกดค้าง: ถ้าปุ่มที่กดค้างคือปุ่มเดียวกับที่คลิกรัว (mouse1) GetAsyncKeyState จะเห็น "ปล่อย" หลังคลิกที่เราส่งเอง ทั้งที่นิ้วยังกดอยู่
+# → ใช้ low-level hook ดู event จริงจากอุปกรณ์ ข้าม event ที่ถูก inject (LLMHF_INJECTED / LLKHF_INJECTED)
+_HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
+_MOUSE_VK = {0x0201: (1, True), 0x0202: (1, False), 0x0204: (2, True), 0x0205: (2, False), 0x0207: (4, True), 0x0208: (4, False)}
+_XDOWN, _XUP = 0x020B, 0x020C
+
+
+class _MSLL(ctypes.Structure):
+    _fields_ = [("pt", wintypes.POINT), ("mouseData", wintypes.DWORD), ("flags", wintypes.DWORD), ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_void_p)]
+
+
+class _KBLL(ctypes.Structure):
+    _fields_ = [("vkCode", wintypes.DWORD), ("scanCode", wintypes.DWORD), ("flags", wintypes.DWORD), ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_void_p)]
+
+
+class PhysicalInput(threading.Thread):
+    """เธรดถือ hook — is_down(vk) บอกว่าปุ่มถูกกดค้างอยู่จริงไหม (จากมือ ไม่ใช่จากโปรแกรม)"""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.down = set()
+        self.stop_ev = threading.Event()
+        self.ready = threading.Event()
+        self._cbs = []
+
+    def is_down(self, vk):
+        return vk in self.down
+
+    def _mouse(self, code, wparam, lparam):
+        if code >= 0:
+            d = ctypes.cast(lparam, ctypes.POINTER(_MSLL)).contents
+            if not (d.flags & 0x01):
+                msg = int(wparam)
+                if msg in _MOUSE_VK:
+                    vk, dn = _MOUSE_VK[msg]
+                    (self.down.add if dn else self.down.discard)(vk)
+                elif msg in (_XDOWN, _XUP):
+                    vk = 5 if (d.mouseData >> 16) == 1 else 6
+                    (self.down.add if msg == _XDOWN else self.down.discard)(vk)
+        return u.CallNextHookEx(None, code, wparam, lparam)
+
+    def _key(self, code, wparam, lparam):
+        if code >= 0:
+            d = ctypes.cast(lparam, ctypes.POINTER(_KBLL)).contents
+            if not (d.flags & 0x10):
+                msg = int(wparam)
+                if msg in (0x0100, 0x0104):
+                    self.down.add(int(d.vkCode))
+                elif msg in (0x0101, 0x0105):
+                    self.down.discard(int(d.vkCode))
+        return u.CallNextHookEx(None, code, wparam, lparam)
+
+    def run(self):
+        u.SetWindowsHookExW.argtypes = [ctypes.c_int, _HOOKPROC, wintypes.HINSTANCE, wintypes.DWORD]
+        u.SetWindowsHookExW.restype = wintypes.HHOOK
+        u.CallNextHookEx.argtypes = [wintypes.HHOOK, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM]
+        u.CallNextHookEx.restype = ctypes.c_long
+        u.UnhookWindowsHookEx.argtypes = [wintypes.HHOOK]
+        self._cbs = [_HOOKPROC(self._mouse), _HOOKPROC(self._key)]   # ต้องถือ reference ไว้ ไม่งั้นโดน GC
+        hooks = [h for h in (u.SetWindowsHookExW(14, self._cbs[0], None, 0), u.SetWindowsHookExW(13, self._cbs[1], None, 0)) if h]
+        # สถานะตั้งต้นจาก GetAsyncKeyState (ปุ่มที่กดค้างอยู่ก่อนเปิด hook)
+        for vk in (1, 2, 4, 5, 6):
+            if key_down(vk):
+                self.down.add(vk)
+        self.ready.set()
+        msg = wintypes.MSG()
+        while not self.stop_ev.is_set():
+            while u.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1):
+                u.TranslateMessage(ctypes.byref(msg))
+                u.DispatchMessageW(ctypes.byref(msg))
+            time.sleep(0.003)
+        for h in hooks:
+            u.UnhookWindowsHookEx(h)
+
+    def stop(self):
+        self.stop_ev.set()
+
+
 def roblox_focused():
     """เช็คว่าหน้าต่างที่โฟกัสอยู่คือ Roblox — แคชรายชื่อหน้าต่างไว้ 1 วิ
     (roblox_windows() ไล่ทุกหน้าต่างในเครื่อง ใช้ ~0.4 ms ถ้าเรียกทุกคลิกจะคอขวดทันทีตอนตั้งเร็วๆ)"""
@@ -210,6 +289,7 @@ class Clicker(threading.Thread):
         self.burst_n = 0
         self._hold_active = False
         self._up_polls = 0
+        self.phys = None            # PhysicalInput ตอนโหมดกดค้างทำงาน
 
     # ---------- ควบคุม ----------
     def describe(self):
@@ -228,6 +308,10 @@ class Clicker(threading.Thread):
         self.clicks, self.started_at, self.paused_reason = 0, time.time(), ""
         self.point_i = self.burst_n = 0
         self._hold_active, self._up_polls = False, 0
+        if self.cfg["click_trigger"] == "hold":
+            self.phys = PhysicalInput()
+            self.phys.start()
+            self.phys.ready.wait(1.0)
         self.on.set()
         self.log(f"🖱 เริ่มออโต้ — {self.describe()}" + ("  (เฉพาะตอนอยู่ในหน้าต่าง Roblox)" if self.cfg["click_only_roblox"] else "  ⚠ ทุกหน้าต่าง"))
         self.emit("click_state", {"on": True})
@@ -236,6 +320,9 @@ class Clicker(threading.Thread):
         if not self.on.is_set():
             return
         self.on.clear()
+        if self.phys:
+            self.phys.stop()
+            self.phys = None
         dur = time.time() - self.started_at
         self.log(f"🖱 หยุดออโต้ — คลิกไป {self.clicks} ครั้งใน {dur:.0f} วิ" + (f" ({why})" if why else ""))
         self.emit("click_state", {"on": False, "clicks": self.clicks, "seconds": dur, "why": why})
@@ -303,13 +390,15 @@ class Clicker(threading.Thread):
             self.log("▶ กลับมาที่ Roblox แล้ว — ทำต่อ")
         # โหมดกดค้าง: คลิกเฉพาะตอนที่ปุ่มถูกกดค้างไว้จริงๆ
         if c["click_trigger"] == "hold":
-            if key_down(c["click_hold_vk"]):
+            vk = c["click_hold_vk"]
+            # ปุ่มกายภาพจาก hook (ไม่โดนคลิกที่เราส่งเองกวน) — ถ้า hook ไม่ทำงาน ค่อยถอยไปใช้ GetAsyncKeyState
+            held = self.phys.is_down(vk) if (self.phys and self.phys.ready.is_set()) else key_down(vk)
+            if held:
                 self._hold_active, self._up_polls = True, 0
                 self.paused_reason = ""
             else:
-                # ทนต่อการอ่านค่าพลาดสั้นๆ ได้ 3 รอบ (อินพุตที่เราส่งเองอาจไปกวนสถานะปุ่มเดียวกัน)
                 self._up_polls += 1
-                if self._up_polls >= 3:
+                if self._up_polls >= (1 if self.phys else 3):
                     self._hold_active = False
             if not self._hold_active:
                 self.paused_reason = "hold"
