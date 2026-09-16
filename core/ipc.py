@@ -194,6 +194,9 @@ class CommandServer(threading.Thread):
                 return self.reply(cmd, ok=False, msg="release ยังไม่มีไฟล์ .exe (GitHub Actions อาจกำลัง build อยู่)", **base)
             if not getattr(sys, "frozen", False):
                 return self.reply(cmd, ok=False, msg="รันจากซอร์สอยู่ — ใช้ git pull แทน", **base)
+            from . import fpscap
+            if fpscap.multi_instance_owned() and roblox_pids() and not cmd.get("force"):
+                return self.reply(cmd, ok=False, msg="ยังไม่ติดตั้ง: กำลังถือกุญแจเปิดหลายจอและ Roblox เปิดอยู่ — รีสตาร์ท Toolkit ตอนนี้จะเสียกุญแจ (เปิดเกมตัวถัดไปแล้วตัวเก่าจะปิด) · ปิด Roblox ก่อน หรือส่ง force", **base)
 
             def work():
                 try:

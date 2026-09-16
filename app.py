@@ -2990,5 +2990,17 @@ class App(ctk.CTk):
         self.destroy()
 
 
+def _single_instance():
+    """กันเปิดซ้อน — เจอจริง 2026-09-16: เปิด 2 ตัวพร้อมกัน → ทั้งคู่รับคำสั่งอัปเดตตัวเดียวกัน ตัวหนึ่งติดตั้งสำเร็จ อีกตัวก๊อปไม่ได้ 40 รอบ
+    แล้ว "restore" ไฟล์เก่าทับตัวใหม่ · Anti-AFK กดซ้อน 2 เท่า · status.json เขียนแย่งกัน"""
+    import ctypes
+    ctypes.windll.kernel32.CreateMutexW(None, False, "Local\\RobloxToolkit_single")
+    if ctypes.windll.kernel32.GetLastError() == 183:      # ERROR_ALREADY_EXISTS
+        ctypes.windll.user32.MessageBoxW(None, "Roblox Toolkit เปิดอยู่แล้ว (ดูที่ถาดมุมขวาล่าง)\nถ้าหาไม่เจอ ให้ปิดจาก Task Manager แล้วเปิดใหม่", "Roblox Toolkit", 0x40)
+        return False
+    return True
+
+
 if __name__ == "__main__":
-    App(sys.argv[1:]).mainloop()
+    if "--force" in sys.argv or _single_instance():
+        App(sys.argv[1:]).mainloop()
