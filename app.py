@@ -2058,7 +2058,7 @@ class SettingsPage(Page):
                      ("watch_players", "เฝ้าจำนวนคนในเซิร์ฟที่เล่นอยู่ (ถาม Roblox API ทุก 45 วิ)"),
                      ("auto_hop", "ย้ายไปเซิร์ฟที่คนน้อยสุดเองเมื่อคนเยอะเกิน — ทำเฉพาะตอน Anti-AFK ทำงานและไม่ได้แตะเครื่องมา 1 นาที"),
                      ("adaptive_delay", "ถ้าโดนเตะ idle ทั้งที่ Anti-AFK ทำงานอยู่ ให้ลดช่วงเวลากดลงอัตโนมัติ (-30%)"),
-                     ("overlay", "Overlay มุมจอตอนเล่น (ping / เวลาเล่น / Anti-AFK) — F9 เปิด/ปิด")]:
+                     ("overlay", "Overlay มุมจอตอนเล่น (ping / เวลาเล่น / Anti-AFK) — โชว์เฉพาะตอนหน้าต่างเกมโฟกัสอยู่ · F9 เปิด/ปิด")]:
             ctk.CTkSwitch(card, text=t, variable=self.vars[k], font=F, command=app.sync_cfg).pack(anchor="w", padx=14, pady=3)
         rowh = ctk.CTkFrame(card, fg_color="transparent")
         rowh.pack(anchor="w", padx=14, pady=(2, 4))
@@ -2381,8 +2381,7 @@ class App(ctk.CTk):
                                                     VK_F6: lambda: self.ui(self.click.toggle), VK_F7: lambda: self.ui(self.click.add_point),
                                                     VK_F4: lambda: self.ui(self.toggle_record), VK_F5: lambda: self.ui(self.play_macro)},
                                                    lambda vk: self.log(f"⚠ ลงทะเบียนปุ่มลัด {HK_NAME.get(vk, vk)} ไม่ได้ (โปรแกรมอื่นใช้อยู่)")), daemon=True).start()
-        if self.cfg["overlay"]:
-            self.after(1200, self.overlay.show)
+        # overlay: tick จะโชว์เองเมื่อหน้าต่าง Roblox โฟกัส (ไม่โชว์ทับโปรแกรมอื่น)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.attributes("-topmost", self.cfg["top"])
         if "--afk" in args or self.cfg["start_afk_on_launch"]:
@@ -2506,9 +2505,7 @@ class App(ctk.CTk):
                 pass
         self.overlay.corner = c["overlay_corner"]
         self.dog.enabled = c["watchdog"]
-        if c["overlay"] and not self.overlay.visible:
-            self.overlay.show()
-        elif not c["overlay"] and self.overlay.visible:
+        if not c["overlay"] and self.overlay.visible:
             self.overlay.hide()
         self.apply_cfg_to_engine()
         self.attributes("-topmost", c["top"])
@@ -2552,8 +2549,13 @@ class App(ctk.CTk):
         return self.hist.name(place) if place else ""
 
     def toggle_overlay(self):
-        on = self.overlay.toggle()
+        on = not self.cfg["overlay"]
         self.cfg["overlay"] = on
+        if on and u.GetForegroundWindow() in roblox_windows(True):
+            self.overlay.show()
+        else:
+            self.overlay.hide()
+        self.log("overlay: เปิด (โชว์ตอนอยู่ที่หน้าต่างเกม)" if on else "overlay: ปิด")
         try:
             self.pages["settings"].vars["overlay"].set(on)
         except Exception:
@@ -2923,6 +2925,13 @@ class App(ctk.CTk):
             if self.cfg.get("multi_instance") and int(time.time()) % 5 == 0 and fpscap.multi_instance_tick():
                 self.log("🪟 ยึดกุญแจเปิดหลายจอได้แล้ว — ตอนนี้เปิด Roblox ตัวที่สองได้โดยตัวแรกไม่ปิด")
                 notify.toast("เปิดหลายจอพร้อมแล้ว", "เปิด Roblox ตัวที่สองได้เลย ตัวแรกจะไม่ถูกปิด")
+            # overlay โชว์เฉพาะตอนหน้าต่าง Roblox โฟกัสอยู่ — ไม่งั้นมันไปทับวิดีโอ/โปรแกรมอื่นเป็นกล่องดำ (เจอจริง 2026-09-20)
+            if self.cfg["overlay"]:
+                fg_roblox = u.GetForegroundWindow() in roblox_windows(True)
+                if fg_roblox and not self.overlay.visible:
+                    self.overlay.show()
+                elif not fg_roblox and self.overlay.visible:
+                    self.overlay.hide()
             if self.overlay.visible:
                 nxt = max(0, int(e.next_at - time.time())) if e.running else 0
                 l1 = (f"● AFK ทำงาน · ถัดไป {nxt // 60:02d}:{nxt % 60:02d}", ACC) if e.running else ("○ AFK หยุด (F8)", DIM)
