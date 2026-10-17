@@ -257,8 +257,7 @@ def save_profile(name, cfg):
     p[name] = {k: cfg[k] for k in PROFILE_KEYS if k in cfg}
     try:
         os.makedirs(config.DATA_DIR, exist_ok=True)
-        with open(PROFILES_PATH, "w", encoding="utf-8") as f:
-            json.dump(p, f, ensure_ascii=False, indent=2)
+        config.write_json(PROFILES_PATH, p, indent=2)
     except OSError:
         pass
     return p
@@ -268,8 +267,7 @@ def delete_profile(name):
     p = load_profiles()
     p.pop(name, None)
     try:
-        with open(PROFILES_PATH, "w", encoding="utf-8") as f:
-            json.dump(p, f, ensure_ascii=False, indent=2)
+        config.write_json(PROFILES_PATH, p, indent=2)
     except OSError:
         pass
     return p

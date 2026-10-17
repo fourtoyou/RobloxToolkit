@@ -192,6 +192,8 @@ class CommandServer(threading.Thread):
                 return self.reply(cmd, msg=f"มีเวอร์ชันใหม่ v{info['ver']} (ตอนนี้ v{config.VERSION})", **base)
             if not info["url"]:
                 return self.reply(cmd, ok=False, msg="release ยังไม่มีไฟล์ .exe (GitHub Actions อาจกำลัง build อยู่)", **base)
+            if not info["sha256"]:
+                return self.reply(cmd, ok=False, msg="release นี้ไม่มี SHA256 — ไม่ติดตั้ง (ใส่บรรทัด SHA256 ใน release notes ก่อน)", **base)
             if not getattr(sys, "frozen", False):
                 return self.reply(cmd, ok=False, msg="รันจากซอร์สอยู่ — ใช้ git pull แทน", **base)
             from . import fpscap
@@ -212,9 +214,13 @@ class CommandServer(threading.Thread):
             return self.reply(cmd, msg=f"กำลังโหลด v{info['ver']} — ตรวจไฟล์เสร็จจะปิดแล้วเปิดใหม่เอง (ราว 1 นาที)", **base)
         if c == "join":
             # เข้าเซิร์ฟที่เลือกจากส่วนขยาย — ถ้าเกมเปิดอยู่ใช้ hop (ปิดแล้วเปิดใหม่เข้าเซิร์ฟนั้น) ไม่งั้นเปิดตรงๆ
-            place, job = cmd.get("place"), cmd.get("job")
-            if not place:
+            from . import launcher
+            if not cmd.get("place"):
                 return self.reply(cmd, ok=False, msg="ไม่รู้ว่าเกมไหน")
+            ids = launcher.clean_ids(cmd.get("place"), cmd.get("job"))
+            if not ids:
+                return self.reply(cmd, ok=False, msg="place/job ไม่ถูกรูปแบบ (place = ตัวเลข, job = UUID)")
+            place, job = ids
             if eng.rejoining:
                 return self.reply(cmd, ok=False, msg="กำลังต่อเกมอยู่ รอสักครู่")
             # จำไว้ว่าอยากไปเซิร์ฟไหน — app จะเทียบกับ log ตอนเกมเข้าจริง แล้วบอกผลใน status.json (join_result) + แจ้งเตือน
@@ -225,7 +231,6 @@ class CommandServer(threading.Thread):
                 threading.Thread(target=eng.hop, args=(place, lambda: job), daemon=True).start()
                 how = "ปิดเกมแล้วเปิดใหม่เข้าเซิร์ฟที่เลือก"
             else:
-                from . import launcher
                 launcher.launch(place, job)
                 how = "เปิดเกมเข้าเซิร์ฟที่เลือก"
             if cmd.get("afk") and not eng.running:
@@ -252,11 +257,15 @@ class CommandServer(threading.Thread):
             return self.reply(cmd, msg=f"เอากลับมา {eng.unhide_all()} หน้าต่าง")
         if c == "launch":
             from . import launcher
-            if cmd.get("job"):
-                launcher.launch(cmd.get("place"), cmd.get("job"))
-                return self.reply(cmd, msg=f"เปิดเกม {cmd.get('place')} เข้าเซิร์ฟที่ระบุ")
-            launcher.launch_best(cmd.get("place"), app.log)      # ไม่ระบุเซิร์ฟ → เลือกเซิร์ฟที่ว่างและ ping ต่ำสุดให้
-            return self.reply(cmd, msg=f"เปิดเกม {app.place_name(cmd.get('place'))} (เลือกเซิร์ฟ ping ต่ำสุดให้)")
+            ids = launcher.clean_ids(cmd.get("place"), cmd.get("job"))
+            if not ids:
+                return self.reply(cmd, ok=False, msg="place/job ไม่ถูกรูปแบบ (place = ตัวเลข, job = UUID)")
+            place, job = ids
+            if job:
+                launcher.launch(place, job)
+                return self.reply(cmd, msg=f"เปิดเกม {place} เข้าเซิร์ฟที่ระบุ")
+            launcher.launch_best(place, app.log)      # ไม่ระบุเซิร์ฟ → เลือกเซิร์ฟที่ว่างและ ping ต่ำสุดให้
+            return self.reply(cmd, msg=f"เปิดเกม {app.place_name(place)} (เลือกเซิร์ฟ ping ต่ำสุดให้)")
         if c == "status":
             sw = app.swatch
             return self.reply(cmd, running=eng.running, hidden=len(eng.hidden), windows=len(roblox_windows(True)),

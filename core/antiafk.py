@@ -24,6 +24,13 @@ REASONS = {277: "เน็ตหลุด/เซิร์ฟล่ม", 278: "�
            276: "เซิร์ฟตัดการเชื่อมต่อ", 272: "ข้อมูลไม่ตรงกับเซิร์ฟ", 265: "ตัวละครถูกลบ", 266: "เซิร์ฟไม่ตอบ"}
 IGNORE_REASONS = {285}
 IDLE_NEED, IDLE_MAX_WAIT = 3.0, 120
+PLAYING_RECENT = 30.0     # ขยับเมาส์/กดปุ่มภายในกี่วินาทีที่ถือว่า "กำลังเล่นอยู่"
+
+
+def user_is_playing(fg, roblox_hwnds, idle, recent=PLAYING_RECENT):
+    """True = Roblox เป็นหน้าต่างหน้าสุด และเพิ่งมีการขยับเมาส์/กดปุ่ม → คุณกำลังเล่นเอง
+    คนที่เล่นอยู่ไม่โดนเตะ idle อยู่แล้ว ส่วนการกดแทรกจะแย่งโฟกัส/ดีดเมาส์/ซูมกล้องกลางเกม"""
+    return bool(fg) and fg in roblox_hwnds and idle < recent
 
 
 def reason_text(code):
@@ -159,6 +166,7 @@ class Engine:
         self.next_at = 0
         self.delay, self.action, self.invisible = 600, "jump", True
         self.wait_idle, self.auto_rejoin = True, True
+        self.skip_when_playing = True
         self.rejoining = False
         self.poke_count = 0
         self.last_fail = 0            # รอบที่แล้วกดไม่ติดกี่ครั้งติดกัน
@@ -252,7 +260,10 @@ class Engine:
         self.wait_for_idle()
         if self.stop_ev.is_set():
             return 0
-        prev_paused = self.pre_poke()      # หยุดจำกัด FPS ชั่วคราว ไม่งั้นเกมรับปุ่มไม่ทัน
+        if self.skip_when_playing and user_is_playing(u.GetForegroundWindow(), set(roblox_windows(True)), idle_seconds()):
+            self.log("คุณกำลังเล่น Roblox อยู่ — ข้ามการกดรอบนี้ (ไม่แย่งโฟกัส/ไม่ดีดเมาส์)")
+            return 0
+        prev_paused = self.pre_poke()     # หยุดจำกัด FPS ชั่วคราว ไม่งั้นเกมรับปุ่มไม่ทัน
         with self.lock:
             self.hidden = {h for h in self.hidden if u.IsWindow(h)}
             vis = roblox_windows(True)

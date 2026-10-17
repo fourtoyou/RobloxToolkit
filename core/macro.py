@@ -62,8 +62,7 @@ def macro_path(name):
 
 def macro_save(name, events):
     os.makedirs(MACRO_DIR, exist_ok=True)
-    with open(macro_path(name), "w", encoding="utf-8") as f:
-        json.dump({"at": time.time(), "events": events}, f, ensure_ascii=False)
+    config.write_json(macro_path(name), {"at": time.time(), "events": events})
 
 
 def macro_load(name):

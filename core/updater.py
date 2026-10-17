@@ -54,6 +54,8 @@ def check(repo, timeout=10):
 
 def download(url, dest, size=None, sha256=None, progress=None):
     """โหลดไฟล์ + ตรวจ (ขนาด / SHA256 / เป็น .exe จริง) — คืน sha256 ของไฟล์ที่ได้"""
+    if not sha256:
+        raise RuntimeError("release นี้ไม่มี SHA256 — ไม่ติดตั้ง (ใส่บรรทัด SHA256 ใน release notes ก่อน)")
     tmp = dest + ".part"
     h = hashlib.sha256()
     got = 0

@@ -1,11 +1,12 @@
 """ค่าตั้ง + path กลางของโปรแกรม"""
 import json
 import os
+import threading
 import time
 import sys
 
 APP_NAME = "RobloxToolkit"
-VERSION = "2.22.3"
+VERSION = "2.22.4"
 DEFAULT_REPO = "fourtoyou/RobloxToolkit"   # GitHub ที่ปล่อย Release (อัปเดตอัตโนมัติอ่านจากที่นี่)
 LOCAL = os.environ.get("LOCALAPPDATA", ".")
 # เก็บข้อมูลไว้นอก AppData\Local เพราะ Python จาก Microsoft Store จำลอง (virtualize) โฟลเดอร์นั้น
@@ -40,7 +41,7 @@ BLOXSTRAP_DIR = os.path.join(LOCAL, "Bloxstrap")
 
 DEFAULTS = {
     "delay": 600, "action": "jump", "invisible": True, "immediate": True,
-    "wait_idle": True, "auto_rejoin": True, "top": False,
+    "wait_idle": True, "skip_when_playing": True, "auto_rejoin": True, "top": False,
     "webhook_url": "", "notify_disconnect": True, "notify_rejoin": True,
     "show_server_region": True, "autostart": False, "start_afk_on_launch": False,
     "update_repo": DEFAULT_REPO,
@@ -99,19 +100,32 @@ def load():
     return cfg
 
 
+_wlock = threading.Lock()
+
+
+def write_json(path, data, **kw):
+    """เขียน JSON ผ่านไฟล์ชั่วคราวแล้วสลับทับ — ไฟดับ/โปรแกรมค้างกลางทางไฟล์เดิมก็ไม่พัง (ล็อกกันหลายเธรดเซฟพร้อมกัน)"""
+    with _wlock:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, **kw)
+        for i in range(5):      # Windows: โปรแกรมอื่น (แอนตี้ไวรัส ฯลฯ) เปิดไฟล์ปลายทางค้างอยู่ชั่วขณะ → os.replace โดนปฏิเสธ ลองใหม่
+            try:
+                return os.replace(tmp, path)
+            except PermissionError:
+                time.sleep(0.05 * (i + 1))
+        os.replace(tmp, path)
+
+
 def save(cfg):
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(CFG_PATH, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
+    write_json(CFG_PATH, cfg, indent=2)
 
 
 def write_status(d):
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
-        tmp = STATUS_PATH + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(d, f, ensure_ascii=False)
-        os.replace(tmp, STATUS_PATH)
+        write_json(STATUS_PATH, d)
     except Exception:
         pass
 
@@ -127,10 +141,7 @@ def load_cache():
 def save_cache(c):
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
-        tmp = CACHE_PATH + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(c, f, ensure_ascii=False)
-        os.replace(tmp, CACHE_PATH)
+        write_json(CACHE_PATH, c)
     except Exception:
         pass
 

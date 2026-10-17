@@ -16,6 +16,14 @@ def parse_place(s):
     return m.group(1) if m else None
 
 
+def clean_ids(place, job=None):
+    """ด่านรับคำสั่งจากภายนอก: place ต้องเป็นตัวเลขล้วน, job ต้องเป็น UUID — ไม่งั้นคืน None (กันพารามิเตอร์แปลกเข้า URL roblox://)"""
+    place, job = str(place or "").strip(), str(job or "").strip().lower()
+    if not re.fullmatch(r"[0-9]{1,20}", place) or (job and not re.fullmatch(r"[0-9a-f-]{36}", job)):
+        return None
+    return place, job or None
+
+
 def load_favs():
     try:
         with open(FAV_PATH, encoding="utf-8") as f:
@@ -26,8 +34,7 @@ def load_favs():
 
 def save_favs(favs):
     os.makedirs(config.DATA_DIR, exist_ok=True)
-    with open(FAV_PATH, "w", encoding="utf-8") as f:
-        json.dump(favs, f, ensure_ascii=False, indent=2)
+    config.write_json(FAV_PATH, favs, indent=2)
 
 
 def add_fav(place, name=None):

@@ -328,7 +328,7 @@ class AfkPage(Page):
         e, c = app.eng, app.cfg
         self.v_delay = ctk.IntVar(value=min(c["delay"], 900))
         self.v_action = ctk.StringVar(value=c["action"])
-        self.vars = {k: ctk.BooleanVar(value=c[k]) for k in ("wait_idle", "auto_rejoin", "invisible", "immediate")}
+        self.vars = {k: ctk.BooleanVar(value=c[k]) for k in ("wait_idle", "skip_when_playing", "auto_rejoin", "invisible", "immediate")}
 
         ctk.CTkLabel(self, text="ANTI-AFK", font=FH, text_color=ACC).pack(anchor="w", padx=20, pady=(16, 0))
         ctk.CTkLabel(self, text="F8 = เริ่ม/หยุด จากทุกที่", font=FS, text_color=DIM).pack(anchor="w", padx=20)
@@ -371,7 +371,8 @@ class AfkPage(Page):
 
         g = ctk.CTkFrame(card, fg_color="transparent")
         g.pack(pady=(0, 10))
-        labels = {"wait_idle": "รอให้คุณว่างมือก่อนกด (3 วิ)", "auto_rejoin": "ต่อใหม่อัตโนมัติเมื่อหลุด",
+        labels = {"wait_idle": "รอให้คุณว่างมือก่อนกด (3 วิ)", "skip_when_playing": "ข้ามถ้าคุณกำลังเล่นอยู่",
+                  "auto_rejoin": "ต่อใหม่อัตโนมัติเมื่อหลุด",
                   "invisible": "ล่องหนตอนเด้งขึ้นมา", "immediate": "กดทันทีตอนเริ่ม"}
         for i, (k, t) in enumerate(labels.items()):
             ctk.CTkSwitch(g, text=t, variable=self.vars[k], command=app.sync_cfg, font=F).grid(row=i // 2, column=i % 2, sticky="w", padx=12, pady=3)
@@ -2536,6 +2537,7 @@ class App(ctk.CTk):
         e, c = self.eng, self.cfg
         e.delay, e.action, e.invisible = c["delay"], c["action"], c["invisible"]
         e.wait_idle, e.auto_rejoin = c["wait_idle"], c["auto_rejoin"]
+        e.skip_when_playing = c["skip_when_playing"]
         e.adaptive = c["adaptive_delay"]
         if hasattr(self, "dog"):
             self.dog.crash_relaunch = c["crash_relaunch"]
