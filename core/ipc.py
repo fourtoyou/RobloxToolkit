@@ -117,7 +117,10 @@ class CommandServer(threading.Thread):
                     except OSError:
                         pass
                     if cmd:
-                        self.handle(cmd)
+                        try:
+                            self.handle(cmd)
+                        except Exception as e:      # ค่าผิด เช่น int("abc") — ตอบกลับ ไม่ให้บอทรอจนหมดเวลา
+                            self.reply(cmd, ok=False, msg=f"คำสั่งผิดพลาด: {e}")
                 # ลบผลลัพธ์เก่ากว่า 10 นาที
                 for f in glob.glob(os.path.join(RES_DIR, "*")):
                     if time.time() - os.path.getmtime(f) > 600:

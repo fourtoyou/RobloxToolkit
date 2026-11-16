@@ -151,7 +151,8 @@ class SysMonitor(threading.Thread):
         self.freed_mb = 0
         self._net_prev = None            # (t, bytes_sent, bytes_recv) สำหรับคิด Mbps
         self._up_since = None
-        self._od_paused = False          # เราเป็นคนหยุด OneDrive ไว้ไหม (จะได้เปิดคืนถูกตัว)
+        # เราเป็นคนหยุด OneDrive ไว้ไหม · เริ่มใหม่แล้ว OneDrive ดับ + สวิตช์เปิด = เราปิดไว้ก่อนหน้า → net_tick จะเปิดคืนเมื่อไม่มีเกม
+        self._od_paused = bool(cfg.get("pause_onedrive")) and not onedrive_running()
         self._links = None               # {ชื่อการ์ดเน็ต: up?} — จับจังหวะสาย USB/Wi-Fi หลุด (เกมหลุดวันนี้ 2 ครั้งเพราะแบบนี้)
         self._link_t = 0
         self._wifi_t = 0

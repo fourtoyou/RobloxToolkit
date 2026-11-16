@@ -2823,6 +2823,7 @@ class App(ctk.CTk):
             pass
         if self.rec:
             self.rec.stop()
+            self.fps.paused = False
             self.rec = None
             self.log("⏹ หยุดอัดแล้ว กำลังบันทึก...")
             return
@@ -2993,11 +2994,18 @@ class App(ctk.CTk):
         if self.mplay:
             self.mplay.stop()
         self.click.stop_clicking("ปิดโปรแกรม")
+        self.fps.paused = True
+        self.fps.release()          # ไม่ปลุกเธรดคืนก่อนปิด เกมค้างถาวร
         self.eng.stop()
         if self.eng.hidden:
             self.eng.unhide_all()
         if self.tray:
             self.tray.stop()
+        try:                        # ปิดโปรแกรมตอน OneDrive ถูกเราหยุดอยู่ → เปิดคืน
+            if getattr(self.sys, "_od_paused", False):
+                sysmon.onedrive_resume()
+        except Exception:
+            pass
         self.destroy()
 
 

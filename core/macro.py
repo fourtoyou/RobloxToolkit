@@ -173,9 +173,18 @@ class Player(threading.Thread):
         self.loops, self.speed, self.only_roblox = loops, max(0.1, speed), only_roblox
         self.stop_ev = threading.Event()
         self.round = 0
+        self.held = set()       # ปุ่ม/เมาส์ที่กดค้างอยู่ — ต้องปล่อยตอนหยุด/พัก
 
     def stop(self):
         self.stop_ev.set()
+
+    def release_held(self):
+        for kind, val in self.held:
+            if kind == "key":
+                _send(_key(val, True))
+            else:
+                _send(_mouse(BUTTONS.get(val, BUTTONS["left"])[1]))
+        self.held.clear()
 
     def run(self):
         try:
@@ -186,6 +195,7 @@ class Player(threading.Thread):
                 if not self.play_once():
                     break
         finally:
+            self.release_held()
             self.on_done(self.round)
 
     def play_once(self):
@@ -199,6 +209,7 @@ class Player(threading.Thread):
                 wait(min(gap, 10))       # ถ้าตอนอัดหยุดคิดนาน อย่ารอเกิน 10 วิ
             if self.only_roblox and u.GetForegroundWindow() not in roblox_windows(True):
                 self.log("⏸ มาโครพัก — ไม่ได้อยู่ที่หน้าต่าง Roblox")
+                self.release_held()
                 while not self.stop_ev.is_set() and u.GetForegroundWindow() not in roblox_windows(True):
                     time.sleep(0.3)
                 if self.stop_ev.is_set():
@@ -208,8 +219,10 @@ class Player(threading.Thread):
             elif kind == "mouse":
                 down, up_ = BUTTONS.get(val, BUTTONS["left"])
                 _send(_mouse(up_ if updown else down))
+                (self.held.discard if updown else self.held.add)(("mouse", val))
             elif kind == "key":
                 _send(_key(int(val), bool(updown)))
+                (self.held.discard if updown else self.held.add)(("key", int(val)))
             elif kind == "wheel":
                 _send(_mouse_wheel(int(val)))
         return True

@@ -67,3 +67,41 @@ r = run(cmd="update", install=True)
 assert r["ok"] is False and "SHA256" in r["msg"], r
 
 print("OK: write_json / updater sha guard / clean_ids / ipc wiring")
+
+# fpscap: release() ระหว่างลูปหยุด-ปลุก ต้องไม่เหลือเธรดค้าง suspend (ปิด Toolkit แล้วเกมค้าง)
+import threading as _th, time as _tm  # noqa: E402,E401
+from core import fpscap  # noqa: E402
+_cnt = {}
+def _sus(h): _cnt[h] = _cnt.get(h, 0) + 1; return _cnt[h] - 1
+def _res(h): prev = _cnt.get(h, 0); _cnt[h] = max(0, prev - 1); return prev
+fpscap.k = type("K", (), {"SuspendThread": staticmethod(_sus), "ResumeThread": staticmethod(_res), "CloseHandle": staticmethod(lambda h: 1)})()
+_c = fpscap.FpsCapper(lambda *a: None, {"fps_cap_on": True, "fps_cap": 5})
+_c.should_cap = lambda: not _c.paused
+_c.refresh_handles = lambda: None
+_c.handles = [11, 22]
+_th.Thread(target=_c.run, daemon=True).start()
+for _ in range(20):
+    _tm.sleep(0.07)
+    _c.paused = True
+    _c.release()
+    assert all(v == 0 for v in _cnt.values()), f"เธรดค้าง suspend: {_cnt}"
+    _c.handles, _c.paused = [11, 22], False
+print("OK: fpscap release leaves nothing suspended")
+
+# macro: ปุ่มที่กดค้างต้องถูกปล่อยตอนจบ (ไม่ส่งอินพุตจริง — แทน _send)
+from core import macro  # noqa: E402
+_sent = []
+macro._send = lambda i: _sent.append((i.u.ki.wVk, bool(i.u.ki.dwFlags & 2)))
+macro.roblox_windows = lambda *a: {1}
+macro.u = type("U", (), {"GetForegroundWindow": staticmethod(lambda: 1)})()
+_p = macro.Player([(0, "key", 0x57, False)], lambda m: None, lambda n: None)
+_p.run()
+assert (0x57, False) in _sent and _sent[-1] == (0x57, True), _sent
+print("OK: macro releases held keys")
+
+# sysmon: เริ่มใหม่ตอน OneDrive ดับ + สวิตช์เปิด → ถือว่าเราปิดไว้ (เปิดคืนได้)
+from core import sysmon  # noqa: E402
+sysmon.onedrive_running = lambda: False
+assert sysmon.SysMonitor(lambda *a: None, lambda *a: None, {"pause_onedrive": True})._od_paused is True
+assert sysmon.SysMonitor(lambda *a: None, lambda *a: None, {})._od_paused is False
+print("OK: onedrive resume after restart")

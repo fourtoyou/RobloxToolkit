@@ -4,6 +4,7 @@ import glob
 import json
 import os
 import re
+import shutil
 import threading
 import time
 from datetime import datetime, timezone
@@ -77,7 +78,14 @@ def load_archive():
     try:
         with open(ARCHIVE_PATH, encoding="utf-8") as f:
             return {_key(s): s for s in json.load(f)}
-    except Exception:
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        try:    # อ่านพังไม่ใช่ไม่มีไฟล์ — สำรองไว้ก่อนเซฟครั้งถัดไปจะทับ
+            shutil.copy2(ARCHIVE_PATH, f"{ARCHIVE_PATH}.bad-{int(time.time())}")
+        except Exception:
+            pass
+        config.dbg(f"load_archive อ่านไม่ได้: {e}")
         return {}
 
 

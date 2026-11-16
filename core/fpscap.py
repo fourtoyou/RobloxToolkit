@@ -126,18 +126,20 @@ class FpsCapper(threading.Thread):
                 if time.time() - self.last_refresh >= self.REFRESH:
                     self.last_refresh = time.time()
                     self.refresh_handles()
+                gap = max(0.002, 1.0 / max(1, self.target_fps()) - 0.001)
+                # ถือ lock ตลอดรอบหยุด-ปลุก: release() จะรอจนปลุกครบ ไม่งั้นแย่งกันแล้วเธรดค้าง suspend
                 with self.lock:
                     hs = list(self.handles)
+                    if hs and not self.paused:
+                        self.capping = True
+                        for h in hs:
+                            k.SuspendThread(h)
+                        time.sleep(gap)
+                        for h in hs:
+                            k.ResumeThread(h)
                 if not hs:
                     time.sleep(0.4)
                     continue
-                self.capping = True
-                gap = max(0.002, 1.0 / max(1, self.target_fps()) - 0.001)
-                for h in hs:
-                    k.SuspendThread(h)
-                time.sleep(gap)
-                for h in hs:
-                    k.ResumeThread(h)
                 time.sleep(0.005)
             except Exception as e:
                 config.dbg(f"fpscap: {e}")

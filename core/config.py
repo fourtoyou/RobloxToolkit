@@ -1,12 +1,13 @@
 """ค่าตั้ง + path กลางของโปรแกรม"""
 import json
 import os
+import shutil
 import threading
 import time
 import sys
 
 APP_NAME = "RobloxToolkit"
-VERSION = "2.22.5"
+VERSION = "2.22.6"
 DEFAULT_REPO = "fourtoyou/RobloxToolkit"   # GitHub ที่ปล่อย Release (อัปเดตอัตโนมัติอ่านจากที่นี่)
 LOCAL = os.environ.get("LOCALAPPDATA", ".")
 # เก็บข้อมูลไว้นอก AppData\Local เพราะ Python จาก Microsoft Store จำลอง (virtualize) โฟลเดอร์นั้น
@@ -93,7 +94,14 @@ def load():
     try:
         with open(CFG_PATH, encoding="utf-8") as f:
             data = json.load(f)
-    except Exception:
+    except FileNotFoundError:
+        data = {}
+    except Exception as e:
+        try:    # อ่านพังไม่ใช่ไม่มีไฟล์ — สำรองไว้ก่อนเซฟครั้งถัดไปจะทับ
+            shutil.copy2(CFG_PATH, f"{CFG_PATH}.bad-{int(time.time())}")
+        except Exception:
+            pass
+        dbg(f"config โหลดไม่ได้: {e}")
         data = {}
     cfg = dict(DEFAULTS)
     cfg.update({k: v for k, v in data.items() if k in DEFAULTS})

@@ -97,7 +97,7 @@ class LogWatcher(threading.Thread):
             m = RE_JOIN.search(line)
             if m:
                 st["job"], st["place"], st["handled"] = m.group(1), m.group(2), False
-                self.current.update(place=st["place"], job=st["job"], in_game=True)
+                self.current.update(place=st["place"], job=st["job"], in_game=True, path=p)
             elif RE_SERVER.search(line):
                 ms = RE_SERVER.search(line)
                 st["server"] = (ms.group(1), int(ms.group(2)))
@@ -125,7 +125,7 @@ class LogWatcher(threading.Thread):
         if m:
             st["job"], st["place"], st["handled"] = m.group(1), m.group(2), False
             self.last_join_at = time.time()
-            self.current.update(place=st["place"], job=st["job"], in_game=True, server=None, dc=None)
+            self.current.update(place=st["place"], job=st["job"], in_game=True, server=None, dc=None, path=p)
             self.on_event(("join", st["place"], st["job"], m.group(3)))
             return
         m = RE_SERVER.search(line)
@@ -423,7 +423,14 @@ class Engine:
                 if not job:
                     self.log("หาเซิร์ฟที่เข้าได้ไม่เจอ")
                     break
-                for pid in roblox_pids():
+                pids = roblox_pids()
+                if len(pids) > 1:       # หลายจอ — ฆ่าเฉพาะจอของเซิร์ฟปัจจุบัน
+                    pid = self.match_pid(self.watcher.current.get("path"))
+                    if not pid:
+                        self.log("เปิด Roblox หลายจอ ระบุไม่ได้ว่าจอไหน — ไม่ย้ายเซิร์ฟ")
+                        return False
+                    pids = [pid]
+                for pid in pids:
                     kill_pid(pid)
                 with self.lock:
                     self.hidden = {h for h in self.hidden if u.IsWindow(h)}
